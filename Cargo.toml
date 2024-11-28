@@ -1,0 +1,25 @@
+[package]
+name = "regexpr"
+version = "0.1.2"
+edition = "2021"
+description = "Regular expresions"
+authors = ["Saúl Valdelvira <saul@saulv.es>"]
+license = "MIT"
+readme = "README"
+repository = "https://github.com/saulvaldelvira/regexpr"
+
+[lib]
+name = "regexpr"
+path = "src/lib.rs"
+crate-type = [ "lib", "cdylib", "staticlib" ]
+
+[dependencies]
+
+[build-dependencies.cbindgen]
+version = ">=0.27.0"
+optional = true
+default-features = false
+
+[features]
+default = []
+bindings = ["dep:cbindgen"]
