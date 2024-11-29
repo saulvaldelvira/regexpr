@@ -188,3 +188,30 @@ fn find_matches() {
 
     assert!(matches.next().is_none());
 }
+
+#[test]
+fn range() {
+    template(
+        "^[a-z01]+$",
+        &[
+            "avcd",
+            "0101baba1"
+        ],
+        &[
+            "avcdZZka",
+            "0101baba91"
+        ]
+    );
+    template(
+        "^[^a-z01]+$",
+        &[
+            "99882",
+        ],
+        &[
+            "avcd",
+            "0101baba1",
+            "avcdZZka",
+            "0101baba91"
+        ]
+    );
+}
