@@ -95,6 +95,7 @@ fn star() {
             "abbc"
         ],
     );
+    template(".*", &["", "daksd"], &[]);
 }
 
 #[test]
@@ -169,4 +170,21 @@ fn find_matches() {
     assert_eq!((3,5), m.get_span());
     assert_eq!(2, m.len);
     assert_eq!("AD", m.get_slice());
+
+
+    let pattern = "";
+    let regex = Regex::compile(pattern).unwrap();
+
+    let mut matches = regex.find_matches("AD");
+    let m = matches.next().unwrap();
+    assert_eq!((0,0), m.get_span());
+    assert_eq!(0, m.len);
+    assert_eq!("", m.get_slice());
+
+    let m = matches.next().unwrap();
+    assert_eq!((1,1), m.get_span());
+    assert_eq!(0, m.len);
+    assert_eq!("", m.get_slice());
+
+    assert!(matches.next().is_none());
 }

@@ -251,6 +251,9 @@ impl<'a> Iterator for RegexMatcher<'a> {
     type Item = RegexMatch<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.start.as_str().is_empty() && self.matches.is_empty() {
+                return None
+        }
 
         let mut chars = self.start.clone();
 
@@ -265,10 +268,14 @@ impl<'a> Iterator for RegexMatcher<'a> {
 
         let start = self.start.offset();
         let end = chars.offset();
+
         let len = end - start;
+        let len = self.start.as_str()[..len].chars().count();
 
         let start = self.start.clone();
+
         self.start = chars;
+        self.start.next();
 
         Some(RegexMatch { start, len })
     }
