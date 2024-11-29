@@ -1,14 +1,49 @@
-//! Regexpr
+//! # Regular Expressions
+//! This crate provides a [Regex] struct that compiles and
+//! tests regular expressions.
 //!
-//! Crate for regex expressions
-//!
-//! # Example
+//! ## Example
 //! ```rust
 //! use regexpr::Regex;
 //!
 //! let regex = Regex::compile("abc.*").unwrap();
 //! assert!(regex.test("abc"));
+//! assert!(regex.test("abcde"));
+//! assert!(!regex.test("bcdsd"));
 //! ```
+//!
+//! # Rules
+//!
+//! | Rule  | Meaning |
+//! |---------|---------|
+//!  |  .   |  Matches any character |
+//!  |  * | Matches the previous rule zero or more times |
+//!  |  + | Matches the previous rule one or more times |
+//!  |  ? | Makes the previous rule optional |
+//!  | {n,m} | Matches the previous rule a minimun of n times and a maximun of m times[^min_max] |
+//!  | \[a-z] | Matches any character from a to z[^ranged] |
+//!  | \[agf] | Matches any of the characters inside |
+//!  | \[^...] | Same as the rules above but negated |
+//!  | A \| B | Maches A or B |
+//!  | (ABC) | Groups rules A B and C |
+//!  | \\c | Escapes the character c[^esc] |
+//!
+//!
+//! [^min_max]: If min or max are not present, it means there's no limit on that size. \
+//! Examples:\
+//!     {,12} matches a rule up to 12 \
+//!     {3,} matches a rule at least 3 times. \
+//!     {,} is the same as *
+//!
+//! [^ranged]: The ranges can be mixed. \
+//! Examples: \
+//!     \[a-z123]: Matches any character in the ranges a-z , 1, 2 or 3 \
+//!     \[^0-9ab]: Matches a character that IS NOT a number or a or b
+//!
+//! [^esc]: Example: "\\." Matches a literal dot character.
+//!
+//!
+//!
 
 use std::borrow::Cow;
 use std::fmt::Display;
@@ -143,6 +178,9 @@ impl MatchCase {
     }
 }
 
+/// Main Regex struct
+///
+/// Holds a regular expression
 pub struct Regex {
     matches: Box<[MatchCase]>,
 }
@@ -156,7 +194,6 @@ impl Display for Regex {
             }
             first = false;
             write!(f, "{c:#?}")?;
-
         }
         Ok(())
     }
@@ -330,6 +367,7 @@ impl<'a> RegexCompiler<'a> {
     }
 }
 
+/// Represents a match of a string on a [Regex]
 #[derive(Debug)]
 pub struct RegexMatch<'a> {
     start: CharIndices<'a>,
@@ -337,15 +375,21 @@ pub struct RegexMatch<'a> {
 }
 
 impl RegexMatch<'_> {
+    /// Gets the span of the string where it matched the [Regex]
     pub fn get_span(&self) -> (usize,usize) {
         let o = self.start.offset();
         (o, o + self.len)
     }
+    /// Gets the slice of the string that matched the [Regex]
+    ///
+    /// This is the same as calling [get_span](Self::get_span)
+    /// and then using it to slice the source string
     pub fn get_slice(&self) -> &str {
         &self.start.as_str()[..self.len]
     }
 }
 
+/// Iterator over all the matches of a string in a [Regex]
 #[derive(Debug)]
 pub struct RegexMatcher<'a> {
     matches: &'a [MatchCase],
@@ -389,21 +433,34 @@ impl<'a> Iterator for RegexMatcher<'a> {
 }
 
 impl Regex {
+    /// Compile the given string into a [Regex]
+    ///
+    /// Returns error if the regex is invalid and fails to compile
     pub fn compile(src: &str) -> Result<Self,Cow<'static,str>> {
         RegexCompiler::new(src).process()
     }
+    /// Returns an [Iterator] over all the [`matches`] of the [Regex] in the given string
+    ///
+    /// [`matches`]: RegexMatch
     pub fn find_matches<'a>(&'a self, src: &'a str) -> impl Iterator<Item = RegexMatch<'a>>  {
         RegexMatcher {
             matches: &self.matches,
             start: src.char_indices(),
         }
     }
+    /// Returns true if the regex matches the given string
+    ///
+    /// This is the same as calling [find_matches](Self::find_matches)
+    /// and then checking if the iterator contains at least one element
     pub fn test(&self, src: &str) -> bool {
         self.find_matches(src).next().is_some()
     }
 }
 
+/// This trait is used to add an extension method
+/// [matches_regex](Self::matches_regex) to any str-like object
 pub trait RegexTestable {
+    /// Returns true if it matches the given [Regex]
     fn matches_regex(&self, regex: impl AsRef<str>) -> bool;
 }
 
