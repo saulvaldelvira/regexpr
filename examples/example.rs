@@ -1,8 +1,8 @@
 use regexpr::Regex;
 
 fn main() {
-    let rule = "abc|cba";
-    let r = Regex::compile(rule);
+    let rule = "^(abc|cba)$";
+    let r = Regex::compile(rule).unwrap();
 
     println!("{rule} : {r}");
 

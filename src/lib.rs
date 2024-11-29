@@ -12,10 +12,12 @@
 
 use std::borrow::Cow;
 use std::fmt::Display;
-use std::str::Chars;
+use std::str::{CharIndices, Chars};
 
 #[derive(Clone,Debug)]
 enum MatchCase {
+    Start,
+    End,
     Char(char),
     List(Box<[MatchCase]>),
     Or(Box<[MatchCase]>),
@@ -26,7 +28,7 @@ enum MatchCase {
 }
 
 impl MatchCase {
-    fn star_loop(&self, nc: &mut Chars<'_>) -> bool {
+    fn star_loop(&self, nc: &mut CharIndices<'_>) -> bool {
         loop {
             let mut it = nc.clone();
             if self.matches(&mut it) {
@@ -37,11 +39,11 @@ impl MatchCase {
         }
         true
     }
-    fn matches(&self, nc: &mut Chars<'_>) -> bool {
+    fn matches(&self, nc: &mut CharIndices<'_>) -> bool {
        macro_rules! next {
            () => {
                {
-                   let Some(ch) = nc.next() else { return false };
+                   let Some((_, ch)) = nc.next() else { return false };
                    ch
                }
            };
@@ -95,6 +97,8 @@ impl MatchCase {
             MatchCase::Star(match_case) => {
                 match_case.star_loop(nc)
             },
+            MatchCase::Start => nc.offset() == 0,
+            MatchCase::End => nc.next().is_none(),
         }
     }
 }
@@ -201,6 +205,8 @@ impl<'a> RegexCompiler<'a> {
                         _ => unreachable!()
                     }
                 },
+                '^' => MatchCase::Start,
+                '$' => MatchCase::End,
                 c => MatchCase::Char(c),
             };
             self.append(newcase);
@@ -221,26 +227,65 @@ impl<'a> RegexCompiler<'a> {
     }
 }
 
+pub struct RegexMatch<'a> {
+    start: CharIndices<'a>,
+    len: usize,
+}
+
+impl RegexMatch<'_> {
+    pub fn get_span(&self) -> (usize,usize) {
+        let o = self.start.offset();
+        (o, o + self.len)
+    }
+    pub fn get_slice(&self) -> &str {
+        &self.start.as_str()[..self.len]
+    }
+}
+
+pub struct RegexMatcher<'a> {
+    matches: &'a [MatchCase],
+    start: CharIndices<'a>,
+}
+
+impl<'a> Iterator for RegexMatcher<'a> {
+    type Item = RegexMatch<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        let mut chars = self.start.clone();
+
+        for m in self.matches {
+            if !m.matches(&mut chars) {
+                return match self.start.next() {
+                    Some(_) => self.next(),
+                    None => None
+                }
+            }
+        }
+
+        let start = self.start.offset();
+        let end = chars.offset();
+        let len = end - start;
+
+        let start = self.start.clone();
+        self.start = chars;
+
+        Some(RegexMatch { start, len })
+    }
+}
+
 impl Regex {
     pub fn compile(src: &str) -> Result<Self,Cow<'static,str>> {
         RegexCompiler::new(src).process()
     }
-
-    pub fn test(&self, src: &str) -> bool {
-        fn test_regex_rec<'a>(mut t: impl Iterator<Item = &'a MatchCase>, src: &mut Chars<'a>) -> bool {
-
-            let Some(case) = t.next() else {
-                return src.next().is_none();
-            };
-
-            if !case.matches(src) {
-                return false;
-            }
-
-            test_regex_rec(t, src)
+    pub fn find_matches<'a>(&'a self, src: &'a str) -> impl Iterator<Item = RegexMatch<'a>>  {
+        RegexMatcher {
+            matches: &self.matches,
+            start: src.char_indices(),
         }
-        let mut chrs = src.chars();
-        test_regex_rec(self.matches.iter(), &mut chrs)
+    }
+    pub fn test(&self, src: &str) -> bool {
+        self.find_matches(src).next().is_some()
     }
 }
 

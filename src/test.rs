@@ -20,13 +20,15 @@ fn template(regex: &str, must_pass: &[&str], must_fail: &[&str]) {
 fn abc() {
     template(
         "abc",
-        &["abc"],
+        &[
+            "abc",
+            "abcc",
+            "aabc",
+        ],
         &[
             "ab",
             "a",
             "bc",
-            "abcc",
-            "aabc"
         ]
     );
 }
@@ -56,10 +58,10 @@ fn or() {
         &[
             "abc",
             "cba",
-        ],
-        &[
             "babc",
             "aabc",
+        ],
+        &[
             "cga"
         ]
     );
@@ -83,16 +85,14 @@ fn opt() {
 #[test]
 fn star() {
     template(
-        "(abc)*",
+        "a(abc)*c",
         &[
-            "abc",
-            "abcabc",
-            ""
+            "aabcc",
+            "ac",
+            "aabcabcc",
         ],
         &[
-            "bbc",
-            "ababc",
-            "abcab"
+            "abbc"
         ],
     );
 }
@@ -105,13 +105,21 @@ fn plus() {
             "abc",
             "aabc",
             "aaaabc",
+            "ababc",
         ],
         &[
             "bc",
             "bbc",
-            "ababc",
         ],
     );
+}
+
+#[test]
+fn start_end() {
+    template("abc", &["abc", "aabc", "abcc"], &[]);
+    template("^abc", &["abc", "abcc"], &["aabc"]);
+    template("abc$", &["abc", "aabc"], &["abcc"]);
+    template("^abc$", &["abc"], &["aabc","abcc"]);
 }
 
 #[test]
@@ -144,4 +152,21 @@ fn fail() {
             Err(err) => assert_eq!(err, msg)
         }
     }
+}
+
+#[test]
+fn find_matches() {
+    let pattern = "A(bc)*D";
+    let regex = Regex::compile(pattern).unwrap();
+
+    let mut matches = regex.find_matches("AD_AD");
+    let m = matches.next().unwrap();
+    assert_eq!((0,2), m.get_span());
+    assert_eq!(2, m.len);
+    assert_eq!("AD", m.get_slice());
+
+    let m = matches.next().unwrap();
+    assert_eq!((3,5), m.get_span());
+    assert_eq!(2, m.len);
+    assert_eq!("AD", m.get_slice());
 }
