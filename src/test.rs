@@ -215,3 +215,51 @@ fn range() {
         ]
     );
 }
+
+#[test]
+fn min_max() {
+    template(
+        "^a{3,5}$",
+        &[
+            "aaa",
+            "aaaa",
+            "aaaaa",
+        ],
+        &[
+            "a",
+            "aa",
+            "aaaaaa",
+            "aaaaaaa",
+        ]
+    );
+
+    template(
+        "^a{3,}$",
+        &[
+            "aaa",
+            "aaaa",
+            "aaaaa",
+            "aaaaaa",
+            "aaaaaaa",
+        ],
+        &[
+            "a",
+            "aa",
+        ]
+    );
+
+    template(
+        "^a{,5}$",
+        &[
+            "a",
+            "aa",
+            "aaa",
+            "aaaa",
+            "aaaaa",
+        ],
+        &[
+            "aaaaaa",
+            "aaaaaaa",
+        ]
+    );
+}

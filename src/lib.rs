@@ -27,6 +27,11 @@ enum MatchCase {
     Star(Box<MatchCase>),
     Between(char,char),
     CharMatch(Box<[MatchCase]>),
+    RangeLoop{
+        case: Box<MatchCase>,
+        min: Option<usize>,
+        max: Option<usize>,
+    },
     Not(Box<MatchCase>),
 }
 
@@ -104,6 +109,35 @@ impl MatchCase {
                 });
                 nc.next();
                 ret
+            },
+            MatchCase::RangeLoop { case, min, max } => {
+                let mut n = 0;
+
+                if let Some(min) = min {
+                    for _ in 0..*min {
+                        if !case.matches(nc) {
+                            return false;
+                        }
+                        n += 1;
+                    }
+                }
+
+                loop {
+                    if max.is_some_and(|max| n > max) {
+                        return false;
+                    }
+
+                    let mut it = nc.clone();
+                    if case.matches(&mut it) {
+                        *nc = it;
+                    } else {
+                        break
+                    }
+
+                    n += 1;
+                }
+
+                true
             },
         }
     }
@@ -241,24 +275,27 @@ impl<'a> RegexCompiler<'a> {
                     } else {
                         MatchCase::CharMatch(match_case)
                     }
+                },
+                '{' => {
+                    let last = self.accc.last_mut().unwrap().0.pop()
+                               .ok_or_else(|| format!("Expected pattern before '{c}'"))?;
 
-                    /* let elems: Vec<_> = list.into_iter().map(|case| { */
-                    /*     if negated { */
-                    /*         MatchCase::Not(Box::new(case)) */
-                    /*     } else { case } */
-                    /* }).collect(); */
+                    /* a{100,1000} */
 
-                    /* if negated { */
-                    /*     MatchCase::List(elems.into_boxed_slice()) */
-                    /* } else { */
-                    /*     MatchCase::Or(elems.into_boxed_slice()) */
-                    /* } */
+                    let i = self.chars.as_str().find('}').ok_or("Missing closing '}'")?;
+                    let slice = &self.chars.as_str()[..i];
+                    let mut split = slice.split(',');
+                    let min = split.next().ok_or("Range must be split by ','. Ex: {12,15}")?;
+                    let max = split.next().ok_or("Range must be split by ','. Ex: {12,15}")?;
 
-                    /* let mut range_match = MatchCase::Or(list.into_boxed_slice()); */
-                    /* if negated { */
-                    /*     range_match = MatchCase::Not(Box::new(range_match)); */
-                    /* } */
-                    /* range_match */
+                    let min = if min.is_empty() { None } else { Some(min.parse().ok().ok_or("Error parsing number")?) };
+                    let max = if max.is_empty() { None } else { Some(max.parse().ok().ok_or("Error parsing number")?) };
+
+                    for _ in 0..=i {
+                        self.chars.next();
+                    }
+
+                    MatchCase::RangeLoop { case: Box::new(last), min, max }
                 },
                 '?' | '*' | '+' => {
                     let last = self.accc.last_mut().unwrap().0.pop()
