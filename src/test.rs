@@ -263,3 +263,18 @@ fn min_max() {
         ]
     );
 }
+
+#[test]
+fn lazy() {
+    let regex = Regex::compile(".*?b").unwrap();
+    assert_eq!(2, regex.find_matches("aaaaaabaaaaaab").count());
+
+    let regex = Regex::compile(".*b").unwrap();
+    assert_eq!(1, regex.find_matches("aaaaaabaaaaaab").count());
+
+    let regex = Regex::compile(".+?b").unwrap();
+    assert_eq!(2, regex.find_matches("aaaaaabaaaaaab").count());
+
+    let regex = Regex::compile(".+b").unwrap();
+    assert_eq!(1, regex.find_matches("aaaaaabaaaaaab").count());
+}

@@ -17,7 +17,7 @@
 //! | Rule  | Meaning |
 //! |---------|---------|
 //!  |  .   |  Matches any character |
-//!  |  * | Matches the previous rule zero or more times |
+//!  |  * | Matches the previous rule zero or more times[^non-greedy]|
 //!  |  + | Matches the previous rule one or more times |
 //!  |  ? | Makes the previous rule optional |
 //!  | {n,m} | Matches the previous rule a minimun of n times and a maximun of m times[^min_max] |
@@ -27,7 +27,6 @@
 //!  | A \| B | Maches A or B |
 //!  | (ABC) | Groups rules A B and C |
 //!  | \\c | Escapes the character c[^esc] |
-//!
 //!
 //! [^min_max]: If min or max are not present, it means there's no limit on that size. \
 //! Examples:\
@@ -42,7 +41,18 @@
 //!
 //! [^esc]: Example: "\\." Matches a literal dot character.
 //!
+//! [^non-greedy]: Non greedy versions of * and + exist. \
+//!     *? and +? work just as * and +, but they stop as soon as possible. \
+//!     Example:
+//!     ```text
+//!         Regex: .*b
+//!         Input: aaaaaabaaaaab
+//!         Matches: One match "aaaaaabaaaaab"
 //!
+//!         Regex: .*?b
+//!         Input: aaaaaabaaaaab
+//!         Matches: Two matches "aaaaaab" and "aaaaab"
+//!     ```
 //!
 
 use std::borrow::Cow;
@@ -58,8 +68,14 @@ enum MatchCase {
     Or(Box<[MatchCase]>),
     AnyOne,
     Opt(Box<MatchCase>),
-    OneOrMore(Box<MatchCase>),
-    Star(Box<MatchCase>),
+    OneOrMore {
+        case: Box<MatchCase>,
+        lazy: bool,
+    },
+    Star{
+        case: Box<MatchCase>,
+        lazy: bool
+    },
     Between(char,char),
     CharMatch(Box<[MatchCase]>),
     RangeLoop{
@@ -70,19 +86,59 @@ enum MatchCase {
     Not(Box<MatchCase>),
 }
 
+fn all_match(nc: &mut CharIndices<'_>, matches: &[MatchCase]) -> bool {
+    for i in 0..matches.len() {
+        let following = matches.get(i+1..).unwrap_or(&[]);
+        if !matches[i].matches(nc, following) {
+            return false
+        }
+    }
+    true
+}
+
 impl MatchCase {
-    fn star_loop(&self, nc: &mut CharIndices<'_>) -> bool {
-        loop {
-            let mut it = nc.clone();
-            if self.matches(&mut it) {
-                *nc = it;
-            } else {
-                break
+    fn star_loop(&self, nc: &mut CharIndices<'_>, lazy: bool, following: &[MatchCase]) -> bool {
+        macro_rules! iter {
+            () => {
+                {
+                    let mut it = nc.clone();
+                    if self.matches(&mut it, following) {
+                        *nc = it;
+                    } else {
+                        return true
+                    }
+                }
+            };
+        }
+        if lazy {
+            loop {
+                if !following.is_empty() && all_match(&mut nc.clone(), following) {
+                    return true
+                }
+                iter!()
+            }
+        } else {
+            let mut last_next_match = None;
+
+            loop {
+                if all_match(&mut nc.clone(), following) {
+                    last_next_match = Some(nc.clone());
+                }
+
+                let mut it = nc.clone();
+                if self.matches(&mut it, following) {
+                    *nc = it;
+                } else {
+                    if let Some(it) = last_next_match {
+                        *nc = it;
+                    }
+                    return true
+                }
+
             }
         }
-        true
     }
-    fn matches(&self, nc: &mut CharIndices<'_>) -> bool {
+    fn matches(&self, nc: &mut CharIndices<'_>, following: &[MatchCase]) -> bool {
        macro_rules! next {
            () => {
                {
@@ -98,33 +154,33 @@ impl MatchCase {
             },
             MatchCase::List(l) => {
                 l.iter().all(|rule| {
-                    rule.matches(nc)
+                    rule.matches(nc, following)
                 })
             },
             MatchCase::Or(l) => {
                 l.iter().any(|rule| {
                     let mut newit = nc.clone();
-                    let ret = rule.matches(&mut newit);
+                    let ret = rule.matches(&mut newit, following);
                     if ret { *nc = newit }
                     ret
                 })
             },
             MatchCase::Opt(c) => {
                 let mut newit = nc.clone();
-                if c.matches(&mut newit) {
+                if c.matches(&mut newit, following) {
                     *nc = newit;
                 }
                 true
             },
             MatchCase::AnyOne => nc.next().is_some(),
-            MatchCase::OneOrMore(match_case) => {
-                if !match_case.matches(nc) {
+            MatchCase::OneOrMore { case, lazy } => {
+                if !case.matches(nc, following) {
                     return false;
                 }
-                match_case.star_loop(nc)
+                case.star_loop(nc, *lazy, following)
             },
-            MatchCase::Star(match_case) => {
-                match_case.star_loop(nc)
+            MatchCase::Star { case, lazy } => {
+                case.star_loop(nc, *lazy, following)
             },
             MatchCase::Start => nc.offset() == 0,
             MatchCase::End => nc.next().is_none(),
@@ -134,13 +190,13 @@ impl MatchCase {
             },
             MatchCase::Not(match_case) => {
                 match nc.clone().next() {
-                    Some(_) => !match_case.matches(nc),
+                    Some(_) => !match_case.matches(nc, following),
                     None => false,
                 }
             },
             MatchCase::CharMatch(cases) => {
                 let ret = cases.iter().any(|case| {
-                    case.matches(&mut nc.clone())
+                    case.matches(&mut nc.clone(), following)
                 });
                 nc.next();
                 ret
@@ -150,7 +206,7 @@ impl MatchCase {
 
                 if let Some(min) = min {
                     for _ in 0..*min {
-                        if !case.matches(nc) {
+                        if !case.matches(nc, following) {
                             return false;
                         }
                         n += 1;
@@ -163,7 +219,7 @@ impl MatchCase {
                     }
 
                     let mut it = nc.clone();
-                    if case.matches(&mut it) {
+                    if case.matches(&mut it, following) {
                         *nc = it;
                     } else {
                         break
@@ -338,10 +394,14 @@ impl<'a> RegexCompiler<'a> {
                     let last = self.accc.last_mut().unwrap().0.pop()
                                .ok_or_else(|| format!("Expected pattern before '{c}'"))?;
                     let last = Box::new(last);
+
+                    let lazy = self.chars.clone().next().is_some_and(|c| c == '?');
+                    if lazy { self.chars.next(); }
+
                     match c {
                         '?' => MatchCase::Opt(last),
-                        '+' => MatchCase::OneOrMore(last),
-                        '*' => MatchCase::Star(last),
+                        '+' => MatchCase::OneOrMore { case: last, lazy },
+                        '*' => MatchCase::Star { case: last, lazy },
                         _ => unreachable!()
                     }
                 },
@@ -370,14 +430,15 @@ impl<'a> RegexCompiler<'a> {
 /// Represents a match of a string on a [Regex]
 #[derive(Debug)]
 pub struct RegexMatch<'a> {
-    start: CharIndices<'a>,
+    start: usize,
+    slice: &'a str,
     len: usize,
 }
 
 impl RegexMatch<'_> {
     /// Gets the span of the string where it matched the [Regex]
     pub fn get_span(&self) -> (usize,usize) {
-        let o = self.start.offset();
+        let o = self.start;
         (o, o + self.len)
     }
     /// Gets the slice of the string that matched the [Regex]
@@ -385,7 +446,7 @@ impl RegexMatch<'_> {
     /// This is the same as calling [get_span](Self::get_span)
     /// and then using it to slice the source string
     pub fn get_slice(&self) -> &str {
-        &self.start.as_str()[..self.len]
+        &self.slice[..self.len]
     }
 }
 
@@ -405,30 +466,27 @@ impl<'a> Iterator for RegexMatcher<'a> {
         }
 
         let mut chars = self.start.clone();
-
-        for m in self.matches {
-            if !m.matches(&mut chars) {
-                return match self.start.next() {
-                    Some(_) => self.next(),
-                    None => None,
-                };
-            }
+        if !all_match(&mut chars, self.matches) {
+            return match self.start.next() {
+                Some(_) => self.next(),
+                None => None,
+            };
         }
 
         let start = self.start.offset();
         let end = chars.offset();
 
         let len = end - start;
-        let len = self.start.as_str()[..len].chars().count();
+        let slice = &self.start.as_str()[..len];
+        let len = slice.chars().count();
 
-        let start = self.start.clone();
         self.start = chars;
 
         if self.matches.is_empty() {
             self.start.next();
         }
 
-        Some( RegexMatch { start, len } )
+        Some( RegexMatch { start, slice, len } )
     }
 }
 
