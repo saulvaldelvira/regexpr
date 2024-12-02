@@ -17,7 +17,7 @@
 //! | Rule  | Meaning |
 //! |---------|---------|
 //!  |  .   |  Matches any character |
-//!  |  * | Matches the previous rule zero or more times[^non-greedy]|
+//!  |  * | Matches the previous rule zero or more times |
 //!  |  + | Matches the previous rule one or more times |
 //!  |  ? | Makes the previous rule optional |
 //!  | {n,m} | Matches the previous rule a minimun of n times and a maximun of m times[^min_max] |
@@ -41,18 +41,23 @@
 //!
 //! [^esc]: Example: "\\." Matches a literal dot character.
 //!
-//! [^non-greedy]: Non greedy versions of * and + exist. \
-//!     *? and +? work just as * and +, but they stop as soon as possible. \
-//!     Example:
-//!     ```text
-//!         Regex: .*b
-//!         Input: aaaaaabaaaaab
-//!         Matches: One match "aaaaaabaaaaab"
 //!
-//!         Regex: .*?b
-//!         Input: aaaaaabaaaaab
-//!         Matches: Two matches "aaaaaab" and "aaaaab"
-//!     ```
+//!
+//! ## Greedy vs. Lazy
+//! "Lazy" versions of * and + exist. \
+//! *? and +? work just as * and +, but they stop as soon as possible.
+//!
+//! ### Example
+//!
+//! ```text
+//!     Regex: .*b
+//!     Input: aaaaaabaaaaab
+//!     Matches: One match "aaaaaabaaaaab"
+//!
+//!     Regex: .*?b
+//!     Input: aaaaaabaaaaab
+//!     Matches: Two matches "aaaaaab" and "aaaaab"
+//! ```
 //!
 
 use std::borrow::Cow;

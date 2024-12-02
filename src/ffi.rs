@@ -1,3 +1,5 @@
+//! C bindings
+
 use std::ffi::{c_char, CStr};
 use std::ptr;
 
