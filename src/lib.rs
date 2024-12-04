@@ -451,9 +451,7 @@ impl RegexMatch<'_> {
     ///
     /// This is the same as calling [get_span](Self::get_span)
     /// and then using it to slice the source string
-    pub fn get_slice(&self) -> &str {
-        &self.slice[..self.len]
-    }
+    pub fn get_slice(&self) -> &str { self.slice }
 }
 
 impl Display for RegexMatch<'_> {
@@ -493,7 +491,6 @@ impl<'a> Iterator for RegexMatcher<'a> {
 
         let len = end - start;
         let slice = &self.start.as_str()[..len];
-        let len = slice.chars().count();
 
         self.start = chars;
 
