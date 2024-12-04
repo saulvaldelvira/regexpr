@@ -16,10 +16,15 @@ fn main() {
     stdout().flush().unwrap();
 
     stdin().lines().map_while(Result::ok).for_each(|line| {
-        if regex.test(&line) {
-            println!("Matches!");
+        let it = regex.find_matches(&line);
+        if it.clone().next().is_none() {
+            println!("No matches");
         } else {
-            println!("Doesn't match");
+            println!("=== Matches ===");
+            for (i,m) in it.enumerate() {
+                println!("{}) {m}", i + 1);
+            }
+            println!("===============");
         }
         print!("> ");
         stdout().flush().unwrap();

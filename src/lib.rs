@@ -455,20 +455,29 @@ impl RegexMatch<'_> {
     }
 }
 
+impl Display for RegexMatch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (s,e) = self.get_span();
+        write!(f, "[{s},{e}]: \"{}\"", self.get_slice())
+    }
+}
+
 /// Iterator over all the matches of a string in a [Regex]
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct RegexMatcher<'a> {
     matches: &'a [MatchCase],
     start: CharIndices<'a>,
+    first: bool,
 }
 
 impl<'a> Iterator for RegexMatcher<'a> {
     type Item = RegexMatch<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.start.as_str().is_empty() && self.matches.is_empty() {
+        if self.start.as_str().is_empty() && !self.first {
             return None;
         }
+        self.first = false;
 
         let mut chars = self.start.clone();
         if !all_match(&mut chars, self.matches) {
@@ -505,10 +514,11 @@ impl Regex {
     /// Returns an [Iterator] over all the [`matches`] of the [Regex] in the given string
     ///
     /// [`matches`]: RegexMatch
-    pub fn find_matches<'a>(&'a self, src: &'a str) -> impl Iterator<Item = RegexMatch<'a>>  {
+    pub fn find_matches<'a>(&'a self, src: &'a str) -> RegexMatcher<'a>  {
         RegexMatcher {
             matches: &self.matches,
             start: src.char_indices(),
+            first: true,
         }
     }
     /// Returns true if the regex matches the given string
