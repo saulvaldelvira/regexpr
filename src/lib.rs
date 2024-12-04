@@ -62,6 +62,7 @@
 
 use std::borrow::Cow;
 use std::fmt::Display;
+use std::iter::FusedIterator;
 use std::str::{CharIndices, Chars};
 
 #[derive(Clone,Debug)]
@@ -503,6 +504,8 @@ impl<'a> Iterator for RegexMatcher<'a> {
         Some( RegexMatch { start, slice, len } )
     }
 }
+
+impl FusedIterator for RegexMatcher<'_> { }
 
 impl Regex {
     /// Compile the given string into a [Regex]
