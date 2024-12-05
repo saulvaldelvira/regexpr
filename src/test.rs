@@ -1,4 +1,10 @@
-use core::panic;
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::expect_used,
+    unused_must_use,
+    clippy::pedantic,
+)]
 
 use crate::{Regex, RegexTestable};
 

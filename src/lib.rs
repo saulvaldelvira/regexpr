@@ -60,6 +60,14 @@
 //! ```
 //!
 
+#![deny(
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::expect_used,
+    unused_must_use
+)]
+#![warn(clippy::pedantic)]
+
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::iter::FusedIterator;
@@ -121,7 +129,7 @@ impl MatchCase {
                 if !following.is_empty() && all_match(&mut nc.clone(), following) {
                     return true
                 }
-                iter!()
+                iter!();
             }
         } else {
             let mut last_next_match = None;
@@ -250,7 +258,7 @@ pub struct Regex {
 impl Display for Regex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut first = true;
-        for c in self.matches.iter() {
+        for c in &self.matches {
             if !first {
                 write!(f, " => ")?;
             }
@@ -303,6 +311,12 @@ impl<'a> RegexCompiler<'a> {
             None => unreachable!(),
         }
     }
+    fn last_acc(&mut self) -> &mut RegexCompilerScope {
+        self.accc.last_mut().unwrap_or_else(|| {
+            unreachable!()
+        })
+    }
+    #[allow(clippy::too_many_lines)]
     fn process(&mut self) -> Result<Regex,Cow<'static,str>> {
         while let Some(c) = self.chars.next() {
             macro_rules! next {
@@ -327,11 +341,11 @@ impl<'a> RegexCompiler<'a> {
                 }
                 '|' => {
                     match self.accc.pop() {
-                        Some((acc, mut opt)) => {
+                        Some((mut acc, mut opt)) => {
                             let m = if acc.len() > 1 {
                                 MatchCase::List(acc.into_boxed_slice())
                             } else {
-                                acc.into_iter().next().unwrap()
+                                acc.remove(0)
                             };
                             opt.get_or_insert_with(Vec::new).push(m);
                             self.accc.push((Vec::new(), opt));
@@ -376,7 +390,7 @@ impl<'a> RegexCompiler<'a> {
                     }
                 },
                 '{' => {
-                    let last = self.accc.last_mut().unwrap().0.pop()
+                    let last = self.last_acc().0.pop()
                                .ok_or_else(|| format!("Expected pattern before '{c}'"))?;
 
                     /* a{100,1000} */
@@ -397,7 +411,7 @@ impl<'a> RegexCompiler<'a> {
                     MatchCase::RangeLoop { case: Box::new(last), min, max }
                 },
                 '?' | '*' | '+' => {
-                    let last = self.accc.last_mut().unwrap().0.pop()
+                    let last = self.last_acc().0.pop()
                                .ok_or_else(|| format!("Expected pattern before '{c}'"))?;
                     let last = Box::new(last);
 
@@ -429,7 +443,7 @@ impl<'a> RegexCompiler<'a> {
         if self.accc.is_empty() {
             self.accc.push((Vec::new(), None));
         }
-        self.accc.last_mut().unwrap().0.push(case);
+        self.last_acc().0.push(case);
     }
 }
 
@@ -443,14 +457,16 @@ pub struct RegexMatch<'a> {
 
 impl RegexMatch<'_> {
     /// Gets the span of the string where it matched the [Regex]
+    #[must_use]
     pub fn get_span(&self) -> (usize,usize) {
         let o = self.start;
         (o, o + self.len)
     }
     /// Gets the slice of the string that matched the [Regex]
     ///
-    /// This is the same as calling [get_span](Self::get_span)
+    /// This is the same as calling ``get_span``
     /// and then using it to slice the source string
+    #[must_use]
     pub fn get_slice(&self) -> &str { self.slice }
 }
 
@@ -508,12 +524,18 @@ impl Regex {
     /// Compile the given string into a [Regex]
     ///
     /// Returns error if the regex is invalid and fails to compile
+    ///
+    /// # Errors
+    /// If the regex fails to compile, the error variant contains
+    /// a message explaining the issue
+    ///
     pub fn compile(src: &str) -> Result<Self,Cow<'static,str>> {
         RegexCompiler::new(src).process()
     }
     /// Returns an [Iterator] over all the [`matches`] of the [Regex] in the given string
     ///
     /// [`matches`]: RegexMatch
+    #[must_use]
     pub fn find_matches<'a>(&'a self, src: &'a str) -> RegexMatcher<'a>  {
         RegexMatcher {
             matches: &self.matches,
@@ -523,15 +545,16 @@ impl Regex {
     }
     /// Returns true if the regex matches the given string
     ///
-    /// This is the same as calling [find_matches](Self::find_matches)
+    /// This is the same as calling ``find_matches``
     /// and then checking if the iterator contains at least one element
+    #[must_use]
     pub fn test(&self, src: &str) -> bool {
         self.find_matches(src).next().is_some()
     }
 }
 
 /// This trait is used to add an extension method
-/// [matches_regex](Self::matches_regex) to any str-like object
+/// ``matches_regex`` to any str-like object
 pub trait RegexTestable {
     /// Returns true if it matches the given [Regex]
     fn matches_regex(&self, regex: impl AsRef<str>) -> bool;
