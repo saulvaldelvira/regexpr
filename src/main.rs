@@ -17,15 +17,21 @@ fn main() {
         stdout().flush().unwrap();
 
         stdin().lines().map_while(Result::ok).for_each(|line| {
-            let it = regex.find_matches(&line);
+            let mut it = regex.find_matches(&line);
             if it.clone().next().is_none() {
                 println!("No matches");
             } else {
                 println!("=== Matches ===");
-                for (i,m) in it.enumerate() {
+                for (i,m) in (&mut it).enumerate() {
                     println!("{}) {m}", i + 1);
                 }
-                println!("===============");
+                if it.get_groups().iter().any(|l| !l.is_empty()) {
+                    println!("===== Groups ======");
+                    for (i,m) in it.get_groups().iter().enumerate() {
+                        println!("{}) \"{m}\"", i + 1);
+                    }
+                }
+                println!("===================");
             }
             print!("> ");
             stdout().flush().unwrap();

@@ -284,3 +284,59 @@ fn lazy() {
     let regex = Regex::compile(".+b").unwrap();
     assert_eq!(1, regex.find_matches("aaaaaabaaaaaab").count());
 }
+
+#[test]
+fn capture() {
+    template (
+        "^ab(.)c\\1$",
+        &[
+            "ab1c1",
+            "ab2c2",
+        ],
+        &[
+            "ab1c2",
+            "ab2c1",
+        ],
+    );
+    template (
+        "^ab( [a-z]* )c\\1$",
+        &[
+            "ab abcd c abcd ",
+            "ab ahc c ahc ",
+        ],
+        &[
+            "ab ahc c ahc",
+            "ab ahc cahc ",
+            "ab ahc cahc",
+            "ab ahcc ahc",
+            "ab ag2a c ag2a ",
+            "ab1c2",
+            "ab2c1",
+        ],
+    );
+    template (
+        "^1(.*?)2\\1(.*?)3\\k<2>4$",
+        &[
+            "1abc2abcdef3def4",
+            "1abc2abc34",
+        ],
+        &[
+            "1abc2abcd34"
+        ]
+    );
+}
+
+#[test]
+fn capture_or() {
+    template (
+        "^(abc|def)123\\1$",
+        &[
+            "abc123abc",
+            "def123def",
+        ],
+        &[
+            "abc123def",
+            "def123abc",
+        ],
+    );
+}
