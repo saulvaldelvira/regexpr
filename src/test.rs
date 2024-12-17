@@ -168,14 +168,14 @@ fn find_matches() {
 
     let mut matches = regex.find_matches("AD_AD");
     let m = matches.next().unwrap();
-    assert_eq!((0,2), m.get_span());
-    assert_eq!(2, m.len);
-    assert_eq!("AD", m.get_slice());
+    assert_eq!((0,2), m.span());
+    assert_eq!(2, m.slice().len());
+    assert_eq!("AD", m.slice());
 
     let m = matches.next().unwrap();
-    assert_eq!((3,5), m.get_span());
-    assert_eq!(2, m.len);
-    assert_eq!("AD", m.get_slice());
+    assert_eq!((3,5), m.span());
+    assert_eq!(2, m.slice().len());
+    assert_eq!("AD", m.slice());
 
 
     let pattern = "";
@@ -183,14 +183,14 @@ fn find_matches() {
 
     let mut matches = regex.find_matches("AD");
     let m = matches.next().unwrap();
-    assert_eq!((0,0), m.get_span());
-    assert_eq!(0, m.len);
-    assert_eq!("", m.get_slice());
+    assert_eq!((0,0), m.span());
+    assert_eq!(0, m.slice().len());
+    assert_eq!("", m.slice());
 
     let m = matches.next().unwrap();
-    assert_eq!((1,1), m.get_span());
-    assert_eq!(0, m.len);
-    assert_eq!("", m.get_slice());
+    assert_eq!((1,1), m.span());
+    assert_eq!(0, m.slice().len());
+    assert_eq!("", m.slice());
 
     assert!(matches.next().is_none());
 }
