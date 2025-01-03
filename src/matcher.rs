@@ -120,7 +120,7 @@ impl<'a> Iterator for RegexMatcher<'a> {
 
         self.ctx = chars;
 
-        if self.ctx.following.is_empty() {
+        if self.cases.is_empty() {
             self.ctx.nc.next();
         }
 

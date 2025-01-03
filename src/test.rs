@@ -30,6 +30,7 @@ fn abc() {
             "abc",
             "abcc",
             "aabc",
+            "abcabc",
         ],
         &[
             "ab",
@@ -37,6 +38,8 @@ fn abc() {
             "bc",
         ]
     );
+    let regex = Regex::compile("abc").unwrap();
+    assert_eq!(2, regex.find_matches("abcabc").count());
 }
 
 #[test]

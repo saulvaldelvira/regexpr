@@ -1,6 +1,6 @@
 [package]
 name = "regexpr"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 description = "Regular expresions"
 authors = ["Saúl Valdelvira <saul@saulv.es>"]
