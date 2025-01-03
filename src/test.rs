@@ -392,6 +392,32 @@ fn case_sensitive() {
             "ab",
             "abdc"
         ]
+    )
+}
+
+#[test]
+fn range_with_star() {
+    template(
+        "([aeiou].*){3,}",
+        &[
+            "aei",
+            "assdseki",
+        ],
+        &[
+            "asi",
+            "ao",
+        ]
+    );
+}
+
+#[test]
+fn test_following() {
+    template(
+        "a(b.*c)+d",
+        &[
+            "abcd"
+        ],
+        &[]
     );
 }
 
