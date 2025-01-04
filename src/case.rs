@@ -1,3 +1,5 @@
+use alloc::boxed::Box;
+
 use crate::matcher::RegexCtx;
 
 #[derive(Clone,Debug)]

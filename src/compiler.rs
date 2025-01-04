@@ -1,5 +1,7 @@
-use std::borrow::Cow;
-use std::str::Chars;
+use alloc::vec::Vec;
+use alloc::boxed::Box;
+use alloc::borrow::Cow;
+use core::str::Chars;
 
 use crate::case::MatchCase;
 use crate::Regex;
@@ -14,7 +16,7 @@ pub struct RegexCompiler<'a> {
     n_captures: usize
 }
 
-type Result<T> = std::result::Result<T,Cow<'static,str>>;
+type Result<T> = core::result::Result<T,Cow<'static,str>>;
 
 impl<'a> RegexCompiler<'a> {
     pub fn new(src: &'a str) -> Self {

@@ -74,8 +74,15 @@
 )]
 #![warn(clippy::pedantic)]
 
-use std::borrow::Cow;
-use std::fmt::Display;
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[macro_use]
+extern crate alloc;
+
+use alloc::boxed::Box;
+use alloc::borrow::Cow;
+
+use core::fmt::Display;
 
 mod case;
 use case::MatchCase;
@@ -98,7 +105,7 @@ pub struct Regex {
 }
 
 impl Display for Regex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut first = true;
         for c in &self.matches {
             if !first {

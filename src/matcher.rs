@@ -1,7 +1,9 @@
-use std::borrow::Cow;
-use std::fmt::Display;
-use std::iter::FusedIterator;
-use std::str::CharIndices;
+use alloc::vec::Vec;
+use alloc::boxed::Box;
+use alloc::borrow::Cow;
+use core::fmt::Display;
+use core::iter::FusedIterator;
+use core::str::CharIndices;
 use crate::MatchCase;
 
 
@@ -33,7 +35,7 @@ impl RegexMatch<'_> {
 }
 
 impl Display for RegexMatch<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let (s,e) = self.span();
         write!(f, "[{s},{e}]: \"{}\"", self.slice())
     }
