@@ -6,20 +6,24 @@
     clippy::pedantic,
 )]
 
-use crate::{Regex, RegexTestable};
+use crate::{Regex, RegexConf, RegexTestable, DEFAULT_REGEX_CONF};
 
-fn template(regex: &str, must_pass: &[&str], must_fail: &[&str]) {
+fn template_with_conf(regex: &str, conf: RegexConf, must_pass: &[&str], must_fail: &[&str]) {
     let regex = Regex::compile(regex).unwrap();
     for mp in must_pass {
-        if !regex.test(mp) {
+        if !regex.test_with_conf(mp, conf) {
             panic!("Should've passed: \"{mp}\"");
         }
     }
     for mf in must_fail {
-        if regex.test(mf) {
+        if regex.test_with_conf(mf, conf) {
             panic!("Should've failed: \"{mf}\"");
         }
     }
+}
+
+fn template(regex: &str, must_pass: &[&str], must_fail: &[&str]) {
+    template_with_conf(regex, DEFAULT_REGEX_CONF, must_pass, must_fail);
 }
 
 #[test]
@@ -341,5 +345,39 @@ fn capture_or() {
             "abc123def",
             "def123abc",
         ],
+    );
+}
+
+#[test]
+fn case_sensitive() {
+    template_with_conf(
+        "abc[a-z]",
+        RegexConf { case_sensitive: false },
+        &[
+            "abcz",
+            "ABCz",
+            "AbcZ",
+            "abCZbABc",
+        ],
+        &[
+            "abz",
+            "abdc"
+        ]
+    );
+    template_with_conf(
+        "abc[a-z]",
+        RegexConf { case_sensitive: true },
+        &[
+            "abcz",
+            "abca",
+        ],
+        &[
+            "ABC",
+            "Abc",
+            "abcZ",
+            "abCbABc",
+            "ab",
+            "abdc"
+        ]
     );
 }

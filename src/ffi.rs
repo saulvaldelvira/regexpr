@@ -2,7 +2,7 @@
 
 use std::ffi::{c_char, c_ulong, CStr};
 use std::ptr;
-use crate::{Regex, RegexMatcher};
+use crate::{Regex, RegexConf, RegexMatcher, DEFAULT_REGEX_CONF};
 
 /// Compile the given string into a regex
 ///
@@ -29,10 +29,22 @@ fn regex_compile(src: *const c_char) -> *mut Regex {
 #[no_mangle]
 pub unsafe extern "C"
 fn regex_test(regex: *const Regex, src: *const c_char) -> bool {
+    regex_test_with_conf(regex, src, DEFAULT_REGEX_CONF)
+}
+
+/// Same as [`regex_test`] but with a custom configuration
+///
+/// # Safety
+/// Ensure that.
+/// 1) regex is a valid pointer to a Regex struct
+/// 2) src is a valid NULL terminated C-String
+#[no_mangle]
+pub unsafe extern "C"
+fn regex_test_with_conf(regex: *const Regex, src: *const c_char, conf: RegexConf) -> bool {
     let src = unsafe { CStr::from_ptr(src) };
     let Ok(src) = src.to_str() else { return false };
 
-    unsafe { &*regex } .test(src)
+    unsafe { &*regex } .test_with_conf(src, conf)
 }
 
 /// Returns an iterator over all the matches found in the source string
@@ -45,10 +57,23 @@ fn regex_test(regex: *const Regex, src: *const c_char) -> bool {
 #[no_mangle]
 pub unsafe extern "C"
 fn regex_find_matches(regex: *const Regex, src: *const c_char) -> *mut RegexMatcher<'static> {
+    regex_find_matches_with_conf(regex, src, DEFAULT_REGEX_CONF)
+}
+
+/// Same as [`regex_find_matches`] but with a custom configuration
+///
+/// # Safety
+/// Ensure that.
+/// 1) regex is a valid pointer to a Regex struct
+/// 2) src is a valid NULL terminated C-String
+/// 3) You call `regex_matcher_free` on the returned pointer after you're done
+#[no_mangle]
+pub unsafe extern "C"
+fn regex_find_matches_with_conf(regex: *const Regex, src: *const c_char, conf: RegexConf) -> *mut RegexMatcher<'static> {
     let src = unsafe { CStr::from_ptr(src) };
     let Ok(src) = src.to_str() else { return ptr::null_mut() };
 
-    let matcher = unsafe { &*regex } .find_matches(src);
+    let matcher = unsafe { &*regex } .find_matches_with_conf(src, conf);
     let matcher = Box::new(matcher);
     Box::into_raw(matcher)
 }

@@ -83,7 +83,7 @@ impl MatchCase {
        macro_rules! next {
            () => {
                {
-                   let Some((_, ch)) = ctx.chars().next() else { return false };
+                   let Some(ch) = ctx.next_char() else { return false };
                    ch
                }
            };
@@ -120,7 +120,7 @@ impl MatchCase {
                 }
                 true
             },
-            MatchCase::AnyOne => ctx.chars().next().is_some(),
+            MatchCase::AnyOne => ctx.next_char().is_some(),
             MatchCase::OneOrMore { case, lazy } => {
                 if !case.matches(ctx) {
                     return false;
@@ -131,14 +131,22 @@ impl MatchCase {
             MatchCase::Star { case, lazy } => {
                 case.star_loop(ctx, *lazy)
             },
-            MatchCase::Start => ctx.chars().offset() == 0,
-            MatchCase::End => ctx.chars().next().is_none(),
+            MatchCase::Start => ctx.char_offset() == 0,
+            MatchCase::End => ctx.next_char().is_none(),
             MatchCase::Between(start,end) => {
                 let c = next!();
-                c >= *start && c <= *end
+                let (start,end) = if ctx.conf().case_sensitive {
+                    (*start,*end)
+                } else {
+                    (
+                        start.to_lowercase().next().unwrap_or(*start),
+                        end.to_lowercase().next().unwrap_or(*end),
+                    )
+                };
+                c >= start && c <= end
             },
             MatchCase::Not(match_case) => {
-                match ctx.clone().chars().next() {
+                match ctx.peek_char() {
                     Some(_) => !match_case.matches(ctx),
                     None => false,
                 }
@@ -147,7 +155,7 @@ impl MatchCase {
                 let ret = cases.iter().any(|case| {
                     case.matches(&mut ctx.clone())
                 });
-                ctx.chars().next();
+                ctx.next_char();
                 ret
             },
             MatchCase::RangeLoop { case, min, max } => {
@@ -180,9 +188,17 @@ impl MatchCase {
                 true
             },
             MatchCase::Capture(n) => {
+                let case_sensitive = ctx.conf().case_sensitive;
                 ctx
                 .get_capture(*n)
                 .chars()
+                .map(|c| {
+                    if case_sensitive {
+                        c
+                    } else {
+                        c.to_lowercase().next().unwrap_or(c)
+                    }
+                })
                 .all(|c| next!() == c)
             },
         }

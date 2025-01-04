@@ -4,7 +4,7 @@ use alloc::borrow::Cow;
 use core::fmt::Display;
 use core::iter::FusedIterator;
 use core::str::CharIndices;
-use crate::MatchCase;
+use crate::{MatchCase, RegexConf};
 
 
 #[cfg(doc)]
@@ -52,7 +52,7 @@ pub struct RegexMatcher<'a> {
 
 impl<'a> RegexMatcher<'a> {
     #[must_use]
-    pub fn new(src: &'a str, matches: &'a [MatchCase], n_captures: usize) -> Self {
+    pub fn new(src: &'a str, matches: &'a [MatchCase], n_captures: usize, conf: RegexConf) -> Self {
         let captures = vec![""; n_captures].into_boxed_slice();
         RegexMatcher {
             first: true,
@@ -60,6 +60,7 @@ impl<'a> RegexMatcher<'a> {
             ctx: RegexCtx {
                 captures: Cow::Owned(captures),
                 following: matches,
+                conf,
                 nc: src.char_indices(),
                 open_captures: Cow::Owned(Vec::new()),
             }
@@ -136,12 +137,27 @@ impl FusedIterator for RegexMatcher<'_> { }
 pub (crate) struct RegexCtx<'a> {
     captures: Cow<'a, Box<[&'a str]>>,
     following: &'a [MatchCase],
+    conf: RegexConf,
     nc: CharIndices<'a>,
     open_captures: Cow<'a, Vec<(usize,CharIndices<'a>)>>,
 }
 
+fn __next(conf: RegexConf, chrs: &mut CharIndices<'_>) -> Option<char> {
+    chrs.next().map(|(_,c)| {
+        if conf.case_sensitive {
+            c
+        } else {
+            c.to_lowercase().next().unwrap_or(c)
+        }
+    })
+}
+
 impl<'a> RegexCtx<'a> {
-    pub fn chars(&mut self) -> &mut CharIndices<'a> { &mut self.nc }
+    pub fn next_char(&mut self) -> Option<char> { __next(self.conf, &mut self.nc) }
+    pub fn char_offset(&mut self) -> usize { self.nc.offset() }
+    pub fn peek_char(&mut self) -> Option<char> { __next(self.conf, &mut self.nc.clone()) }
+    pub fn conf(&self) -> RegexConf { self.conf }
+
     fn next_case(&mut self) {
         self.following = self.following.get(1..).unwrap_or(&[]);
     }

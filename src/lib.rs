@@ -118,6 +118,16 @@ impl Display for Regex {
     }
 }
 
+#[derive(Debug,Clone,Copy)]
+#[repr(C)]
+pub struct RegexConf {
+    pub case_sensitive: bool
+}
+
+const DEFAULT_REGEX_CONF: RegexConf = RegexConf {
+    case_sensitive: true
+};
+
 impl Regex {
     /// Compile the given string into a [Regex]
     ///
@@ -130,20 +140,38 @@ impl Regex {
     pub fn compile(src: &str) -> Result<Self,Cow<'static,str>> {
         RegexCompiler::new(src).process()
     }
+
     /// Returns an [Iterator] over all the [`matches`] of the [Regex] in the given string
     ///
     /// [`matches`]: RegexMatch
     #[must_use]
+    #[inline]
     pub fn find_matches<'a>(&'a self, src: &'a str) -> RegexMatcher<'a>  {
-        RegexMatcher::new(src, &self.matches, self.n_captures)
+        self.find_matches_with_conf(src, DEFAULT_REGEX_CONF)
     }
+
+    /// Just like [`find_matches`](Self::find_matches), but uses a different configuration
+    #[must_use]
+    #[inline]
+    pub fn find_matches_with_conf<'a>(&'a self, src: &'a str, conf: RegexConf) -> RegexMatcher<'a>  {
+        RegexMatcher::new(src, &self.matches, self.n_captures, conf)
+    }
+
     /// Returns true if the regex matches the given string
     ///
     /// This is the same as calling ``find_matches``
     /// and then checking if the iterator contains at least one element
     #[must_use]
+    #[inline]
     pub fn test(&self, src: &str) -> bool {
         self.find_matches(src).next().is_some()
+    }
+
+    /// Just like [`test`](Self::test) but with a different configuration
+    #[must_use]
+    #[inline]
+    pub fn test_with_conf(&self, src: &str, conf: RegexConf) -> bool {
+        self.find_matches_with_conf(src, conf).next().is_some()
     }
 }
 
