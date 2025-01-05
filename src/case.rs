@@ -116,7 +116,9 @@ impl MatchCase {
             MatchCase::Opt(c) => {
                 let mut newit = ctx.clone();
                 if c.matches(&mut newit) {
-                    *ctx = newit;
+                    if newit.clone().following_match() {
+                        *ctx = newit;
+                    }
                 }
                 true
             },

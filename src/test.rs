@@ -93,6 +93,17 @@ fn opt() {
             "opt-bodytail",
         ],
     );
+    template(
+        "a.?b",
+        &[
+            "ab",
+            "acb",
+        ],
+        &[
+            "accb",
+            "ac",
+        ],
+    );
 }
 
 #[test]
