@@ -91,6 +91,9 @@ mod compiler;
 use compiler::RegexCompiler;
 
 mod matcher;
+mod error;
+pub use error::RegexError;
+type Result<T> = core::result::Result<T,RegexError>;
 
 #[doc(inline)]
 pub use matcher::{RegexMatch,RegexMatcher};
@@ -137,7 +140,7 @@ impl Regex {
     /// If the regex fails to compile, the error variant contains
     /// a message explaining the issue
     ///
-    pub fn compile(src: &str) -> Result<Self,Cow<'static,str>> {
+    pub fn compile(src: &str) -> Result<Self> {
         RegexCompiler::new(src).process()
     }
 
@@ -176,25 +179,54 @@ impl Regex {
 }
 
 impl TryFrom<&str> for Regex {
-    type Error = Cow<'static,str>;
+    type Error = RegexError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn try_from(value: &str) -> Result<Self> {
         Regex::compile(value)
     }
 }
 
 /// This trait is used to add an extension method
-/// ``matches_regex`` to any str-like object
+/// ``matches_regex`` to &str
 pub trait RegexTestable {
     /// Returns true if it matches the given [Regex]
-    fn matches_regex(&self, regex: impl AsRef<str>) -> bool;
+    fn matches_regex(&self, regex: &str) -> bool;
 }
 
-impl<T: AsRef<str>> RegexTestable for T {
-    fn matches_regex(&self, regex: impl AsRef<str>) -> bool {
-        Regex::compile(regex.as_ref())
-              .map(|regex| regex.test(self.as_ref()))
+impl RegexTestable for &str {
+    fn matches_regex(&self, regex: &str) -> bool {
+        Regex::compile(regex)
+              .map(|regex| regex.test(self))
               .unwrap_or(false)
+    }
+}
+
+pub trait ReplaceRegex {
+    /// Extension method for &str, that replaces all instances of a regex with a replacement string
+    ///
+    /// # Errors
+    /// If the regex fails to compile
+    fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a,str>>;
+}
+
+impl ReplaceRegex for &str {
+    fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a,str>> {
+        let regex = Regex::compile(regex)?;
+        let matches = regex.find_matches(self);
+        if matches.clone().next().is_none() {
+            return Ok(Cow::Borrowed(self))
+        }
+
+        let mut result = String::new();
+        let mut curr = 0;
+        for m in matches {
+            let (start,end) = m.span();
+            result.push_str(&self[curr..start]);
+            result.push_str(replacement);
+            curr = end;
+        }
+
+        Ok(Cow::Owned(result))
     }
 }
 

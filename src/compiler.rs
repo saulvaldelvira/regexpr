@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
 use alloc::boxed::Box;
-use alloc::borrow::Cow;
 use core::str::Chars;
 
 use crate::case::MatchCase;
 use crate::Regex;
+use crate::Result;
 
 type OrList = Vec<MatchCase>;
 type RegexCompilerScope = (Vec<MatchCase>, Option<OrList>, Option<usize>);
@@ -15,8 +15,6 @@ pub struct RegexCompiler<'a> {
     accc: Vec<RegexCompilerScope>,
     n_captures: usize
 }
-
-type Result<T> = core::result::Result<T,Cow<'static,str>>;
 
 impl<'a> RegexCompiler<'a> {
     pub fn new(src: &'a str) -> Self {

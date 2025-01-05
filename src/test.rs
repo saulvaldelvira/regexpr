@@ -6,7 +6,9 @@
     clippy::pedantic,
 )]
 
-use crate::{Regex, RegexConf, RegexTestable, DEFAULT_REGEX_CONF};
+use std::borrow::Cow;
+
+use crate::{Regex, RegexConf, RegexTestable, ReplaceRegex, DEFAULT_REGEX_CONF};
 
 fn template_with_conf(regex: &str, conf: RegexConf, must_pass: &[&str], must_fail: &[&str]) {
     let regex = Regex::compile(regex).unwrap();
@@ -174,7 +176,7 @@ fn fail() {
         let msg = format!("Expected pattern before '{c}'");
         match Regex::compile(c) {
             Ok(_) => panic!(),
-            Err(err) => assert_eq!(err, msg)
+            Err(err) => assert_eq!(err.to_string(), msg)
         }
     }
 }
@@ -391,4 +393,17 @@ fn case_sensitive() {
             "abdc"
         ]
     );
+}
+
+#[test]
+fn replace_regex() {
+    let input = "abcdacb";
+    let replaced = input.replace_regex("a.?b", "0").unwrap();
+    assert!(matches!(replaced, Cow::Owned(_)));
+    assert_eq!(replaced, "0cd0");
+
+    let input = "abcd";
+    let replaced = input.replace_regex("[0-9]", "P").unwrap();
+    assert!(matches!(replaced, Cow::Borrowed(_)));
+    assert_eq!(replaced, input);
 }
