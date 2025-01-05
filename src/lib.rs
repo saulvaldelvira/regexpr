@@ -81,6 +81,7 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use alloc::borrow::Cow;
+use alloc::string::String;
 
 use core::fmt::Display;
 

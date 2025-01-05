@@ -1,5 +1,6 @@
 use core::error::Error;
 use core::fmt::Display;
+use alloc::string::String;
 
 use alloc::borrow::Cow;
 
