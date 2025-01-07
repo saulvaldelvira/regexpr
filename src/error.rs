@@ -7,6 +7,12 @@ use alloc::borrow::Cow;
 #[derive(Debug)]
 pub struct RegexError(Cow<'static,str>);
 
+impl RegexError {
+    pub fn inner(&self) -> &Cow<'static,str> {
+        &self.0
+    }
+}
+
 impl From<&'static str> for RegexError {
     fn from(value: &'static str) -> Self {
         RegexError(value.into())
