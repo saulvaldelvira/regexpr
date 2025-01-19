@@ -1,0 +1,19 @@
+Fix bug with lookahead
+======================
+The way that lookahead works right now is broken.
+We don't take in count the following cases
+of a group, or the remainig iterations of a loop.
+
+Examples:
+ab(c.*de)fg
+will match "abcfg", cause when we reach the .*, we have
+no way of knowing that we also have a de ahead, not only
+the fg.
+
+ab(c.*){2,3}
+won't match abcc, cause in the first iteration of (c.*) the
+wildcard will eat up all the characters, not knowing that
+the (c.*) group will be matched again.
+
+We need a more sophisticated way of storing lookahead cases
+in the RegexCtx
