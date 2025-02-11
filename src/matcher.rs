@@ -1,11 +1,10 @@
-use alloc::vec::Vec;
-use alloc::boxed::Box;
+use crate::{MatchCase, RegexConf};
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::fmt::Display;
 use core::iter::FusedIterator;
 use core::str::CharIndices;
-use crate::{MatchCase, RegexConf};
-
 
 #[cfg(doc)]
 use crate::Regex;
@@ -22,7 +21,7 @@ pub struct RegexMatch<'a> {
 impl RegexMatch<'_> {
     /// Gets the span of the string where it matched the [Regex]
     #[must_use]
-    pub fn span(&self) -> (usize,usize) {
+    pub fn span(&self) -> (usize, usize) {
         let o = self.start;
         (o, o + self.slice.len())
     }
@@ -31,23 +30,24 @@ impl RegexMatch<'_> {
     /// This is the same as calling ``get_span``
     /// and then using it to slice the source string
     #[must_use]
-    pub fn slice(&self) -> &str { self.slice }
+    pub fn slice(&self) -> &str {
+        self.slice
+    }
 }
 
 impl Display for RegexMatch<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let (s,e) = self.span();
+        let (s, e) = self.span();
         write!(f, "[{s},{e}]: \"{}\"", self.slice())
     }
 }
 
 /// Iterator over all the matches of a string in a [Regex]
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct RegexMatcher<'a> {
     first: bool,
     ctx: RegexCtx<'a>,
     cases: &'a [MatchCase],
-
 }
 
 impl<'a> RegexMatcher<'a> {
@@ -63,7 +63,7 @@ impl<'a> RegexMatcher<'a> {
                 conf,
                 nc: src.char_indices(),
                 open_captures: Cow::Owned(Vec::new()),
-            }
+            },
         }
     }
     /// Gets the current state of the capture groups.
@@ -127,23 +127,23 @@ impl<'a> Iterator for RegexMatcher<'a> {
             self.ctx.nc.next();
         }
 
-        Some( RegexMatch { start, slice } )
+        Some(RegexMatch { start, slice })
     }
 }
 
-impl FusedIterator for RegexMatcher<'_> { }
+impl FusedIterator for RegexMatcher<'_> {}
 
-#[derive(Clone,Debug)]
-pub (crate) struct RegexCtx<'a> {
+#[derive(Clone, Debug)]
+pub(crate) struct RegexCtx<'a> {
     captures: Cow<'a, Box<[&'a str]>>,
     following: &'a [MatchCase],
     conf: RegexConf,
     nc: CharIndices<'a>,
-    open_captures: Cow<'a, Vec<(usize,CharIndices<'a>)>>,
+    open_captures: Cow<'a, Vec<(usize, CharIndices<'a>)>>,
 }
 
 fn __next(conf: RegexConf, chrs: &mut CharIndices<'_>) -> Option<char> {
-    chrs.next().map(|(_,c)| {
+    chrs.next().map(|(_, c)| {
         if conf.case_sensitive {
             c
         } else {
@@ -153,19 +153,25 @@ fn __next(conf: RegexConf, chrs: &mut CharIndices<'_>) -> Option<char> {
 }
 
 impl<'a> RegexCtx<'a> {
-    pub fn next_char(&mut self) -> Option<char> { __next(self.conf, &mut self.nc) }
-    pub fn char_offset(&mut self) -> usize { self.nc.offset() }
-    pub fn peek_char(&mut self) -> Option<char> { __next(self.conf, &mut self.nc.clone()) }
-    pub fn conf(&self) -> RegexConf { self.conf }
+    pub fn next_char(&mut self) -> Option<char> {
+        __next(self.conf, &mut self.nc)
+    }
+    pub fn char_offset(&mut self) -> usize {
+        self.nc.offset()
+    }
+    pub fn peek_char(&mut self) -> Option<char> {
+        __next(self.conf, &mut self.nc.clone())
+    }
+    pub fn conf(&self) -> RegexConf {
+        self.conf
+    }
 
     fn next_case(&mut self) {
         self.following = self.following.get(1..).unwrap_or(&[]);
     }
     pub fn get_capture(&self, id: usize) -> &'a str {
         let id = id.wrapping_sub(1);
-        self.captures.get(id).unwrap_or_else(||
-            unreachable!()
-        )
+        self.captures.get(id).unwrap_or_else(|| unreachable!())
     }
     pub fn push_capture(&mut self, id: usize) {
         let caps = self.open_captures.to_mut();
@@ -181,14 +187,15 @@ impl<'a> RegexCtx<'a> {
         /*     .unwrap_or_else(|_| { */
         /*         unreachable!() */
         /*     }); */
-
     }
     pub fn pop_capture(&mut self) {
         self.open_captures.to_mut().pop();
     }
-    pub fn has_following(&self) -> bool { !self.following.is_empty() }
+    pub fn has_following(&self) -> bool {
+        !self.following.is_empty()
+    }
     pub fn update_open_captures(&mut self) {
-        for (id,chars) in self.open_captures.to_mut() {
+        for (id, chars) in self.open_captures.to_mut() {
             let len = self.nc.offset() - chars.offset();
             let slice = &chars.as_str()[..len];
             self.captures.to_mut()[*id - 1] = slice;
@@ -199,10 +206,9 @@ impl<'a> RegexCtx<'a> {
         for case in cases {
             self.next_case();
             if !case.matches(self) {
-                return false
+                return false;
             }
         }
         true
     }
 }
-

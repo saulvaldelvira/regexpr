@@ -1,8 +1,8 @@
 //! C bindings
 
+use crate::{Regex, RegexConf, RegexMatcher, DEFAULT_REGEX_CONF};
 use std::ffi::{c_char, c_ulong, CStr};
 use std::ptr;
-use crate::{Regex, RegexConf, RegexMatcher, DEFAULT_REGEX_CONF};
 
 /// Compile the given string into a regex
 ///
@@ -11,12 +11,15 @@ use crate::{Regex, RegexConf, RegexMatcher, DEFAULT_REGEX_CONF};
 /// 1) src is a valid NULL terminated C-String
 /// 2) out is a valid pointer to a destination Regex struct
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_compile(src: *const c_char) -> *mut Regex {
+pub unsafe extern "C" fn regex_compile(src: *const c_char) -> *mut Regex {
     let src = unsafe { CStr::from_ptr(src) };
-    let Ok(src) = src.to_str() else { return ptr::null_mut() };
+    let Ok(src) = src.to_str() else {
+        return ptr::null_mut();
+    };
 
-    let Ok(regex) = Regex::compile(src) else { return ptr::null_mut() };
+    let Ok(regex) = Regex::compile(src) else {
+        return ptr::null_mut();
+    };
     Box::into_raw(Box::new(regex))
 }
 
@@ -27,8 +30,7 @@ fn regex_compile(src: *const c_char) -> *mut Regex {
 /// 1) regex is a valid pointer to a Regex struct
 /// 2) src is a valid NULL terminated C-String
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_test(regex: *const Regex, src: *const c_char) -> bool {
+pub unsafe extern "C" fn regex_test(regex: *const Regex, src: *const c_char) -> bool {
     regex_test_with_conf(regex, src, DEFAULT_REGEX_CONF)
 }
 
@@ -39,12 +41,15 @@ fn regex_test(regex: *const Regex, src: *const c_char) -> bool {
 /// 1) regex is a valid pointer to a Regex struct
 /// 2) src is a valid NULL terminated C-String
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_test_with_conf(regex: *const Regex, src: *const c_char, conf: RegexConf) -> bool {
+pub unsafe extern "C" fn regex_test_with_conf(
+    regex: *const Regex,
+    src: *const c_char,
+    conf: RegexConf,
+) -> bool {
     let src = unsafe { CStr::from_ptr(src) };
     let Ok(src) = src.to_str() else { return false };
 
-    unsafe { &*regex } .test_with_conf(src, conf)
+    unsafe { &*regex }.test_with_conf(src, conf)
 }
 
 /// Returns an iterator over all the matches found in the source string
@@ -55,8 +60,10 @@ fn regex_test_with_conf(regex: *const Regex, src: *const c_char, conf: RegexConf
 /// 2) src is a valid NULL terminated C-String
 /// 3) You call `regex_matcher_free` on the returned pointer after you're done
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_find_matches(regex: *const Regex, src: *const c_char) -> *mut RegexMatcher<'static> {
+pub unsafe extern "C" fn regex_find_matches(
+    regex: *const Regex,
+    src: *const c_char,
+) -> *mut RegexMatcher<'static> {
     regex_find_matches_with_conf(regex, src, DEFAULT_REGEX_CONF)
 }
 
@@ -68,12 +75,17 @@ fn regex_find_matches(regex: *const Regex, src: *const c_char) -> *mut RegexMatc
 /// 2) src is a valid NULL terminated C-String
 /// 3) You call `regex_matcher_free` on the returned pointer after you're done
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_find_matches_with_conf(regex: *const Regex, src: *const c_char, conf: RegexConf) -> *mut RegexMatcher<'static> {
+pub unsafe extern "C" fn regex_find_matches_with_conf(
+    regex: *const Regex,
+    src: *const c_char,
+    conf: RegexConf,
+) -> *mut RegexMatcher<'static> {
     let src = unsafe { CStr::from_ptr(src) };
-    let Ok(src) = src.to_str() else { return ptr::null_mut() };
+    let Ok(src) = src.to_str() else {
+        return ptr::null_mut();
+    };
 
-    let matcher = unsafe { &*regex } .find_matches_with_conf(src, conf);
+    let matcher = unsafe { &*regex }.find_matches_with_conf(src, conf);
     let matcher = Box::new(matcher);
     Box::into_raw(matcher)
 }
@@ -94,17 +106,19 @@ pub struct Span {
 /// 1) matcher is a valid pointer to a `RegexMatcher`
 /// 2) span is a valid pointer to a Span struct
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_matcher_next(matcher: *mut RegexMatcher<'_>, span: *mut Span) -> bool {
-    match unsafe { &mut *matcher } .next() {
+pub unsafe extern "C" fn regex_matcher_next(
+    matcher: *mut RegexMatcher<'_>,
+    span: *mut Span,
+) -> bool {
+    match unsafe { &mut *matcher }.next() {
         Some(m) => {
             *span = Span {
                 offset: m.span().0 as c_ulong,
                 len: m.slice().len() as c_ulong,
             };
             true
-        },
-        None => false
+        }
+        None => false,
     }
 }
 
@@ -113,9 +127,8 @@ fn regex_matcher_next(matcher: *mut RegexMatcher<'_>, span: *mut Span) -> bool {
 /// # Safety
 /// Ensure that matcher is a valid pointer
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_matcher_free(matcher: *mut RegexMatcher<'_>) {
-    drop( Box::from_raw(matcher) );
+pub unsafe extern "C" fn regex_matcher_free(matcher: *mut RegexMatcher<'_>) {
+    drop(Box::from_raw(matcher));
 }
 
 /// Frees the regex structure
@@ -124,8 +137,7 @@ fn regex_matcher_free(matcher: *mut RegexMatcher<'_>) {
 /// Ensure that.
 /// 1) regex is a valid pointer to a Regex struct that HAS NOT BEEN FREED before
 #[no_mangle]
-pub unsafe extern "C"
-fn regex_free(regex: *mut Regex) {
+pub unsafe extern "C" fn regex_free(regex: *mut Regex) {
     let r = Box::from_raw(regex);
     drop(r);
 }

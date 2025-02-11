@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 
 use crate::matcher::RegexCtx;
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub enum MatchCase {
     Start,
     End,
@@ -19,14 +19,14 @@ pub enum MatchCase {
         case: Box<MatchCase>,
         lazy: bool,
     },
-    Star{
+    Star {
         case: Box<MatchCase>,
-        lazy: bool
+        lazy: bool,
     },
     Capture(usize),
-    Between(char,char),
+    Between(char, char),
     CharMatch(Box<[MatchCase]>),
-    RangeLoop{
+    RangeLoop {
         case: Box<MatchCase>,
         min: Option<usize>,
         max: Option<usize>,
@@ -38,14 +38,14 @@ impl MatchCase {
     fn lazy_star_loop<'a>(&'a self, ctx: &mut RegexCtx<'a>) -> bool {
         loop {
             if ctx.has_following() && ctx.clone().following_match() {
-                return true
+                return true;
             }
             let mut it = ctx.clone();
             if self.matches(&mut it) {
                 *ctx = it;
                 ctx.update_open_captures();
             } else {
-                return true
+                return true;
             }
         }
     }
@@ -65,9 +65,8 @@ impl MatchCase {
                 if let Some(it) = last_next_match {
                     *ctx = it;
                 }
-                return true
+                return true;
             }
-
         }
     }
     fn star_loop<'a>(&'a self, ctx: &mut RegexCtx<'a>, lazy: bool) -> bool {
@@ -79,20 +78,18 @@ impl MatchCase {
         }
     }
     #[allow(clippy::too_many_lines)]
-    pub (crate) fn matches<'a>(&'a self, ctx: &mut RegexCtx<'a>) -> bool {
-       macro_rules! next {
-           () => {
-               {
-                   let Some(ch) = ctx.next_char() else { return false };
-                   ch
-               }
-           };
-       }
+    pub(crate) fn matches<'a>(&'a self, ctx: &mut RegexCtx<'a>) -> bool {
+        macro_rules! next {
+            () => {{
+                let Some(ch) = ctx.next_char() else {
+                    return false;
+                };
+                ch
+            }};
+        }
 
         match self {
-            MatchCase::Char(expected) => {
-                next!() == *expected
-            },
+            MatchCase::Char(expected) => next!() == *expected,
             MatchCase::Group { case, capture_id } => {
                 ctx.push_capture(*capture_id);
                 let ret = case.matches(ctx);
@@ -100,28 +97,22 @@ impl MatchCase {
                 ctx.pop_capture();
                 ret
             }
-            MatchCase::List(cases) => {
-                cases.iter().all(|rule| {
-                    rule.matches(ctx)
-                })
-            },
-            MatchCase::Or(l) => {
-                l.iter().any(|rule| {
-                    let mut newit = ctx.clone();
-                    let ret = rule.matches(&mut newit);
-                    if ret { *ctx = newit }
-                    ret
-                })
-            },
+            MatchCase::List(cases) => cases.iter().all(|rule| rule.matches(ctx)),
+            MatchCase::Or(l) => l.iter().any(|rule| {
+                let mut newit = ctx.clone();
+                let ret = rule.matches(&mut newit);
+                if ret {
+                    *ctx = newit;
+                }
+                ret
+            }),
             MatchCase::Opt(c) => {
                 let mut newit = ctx.clone();
-                if c.matches(&mut newit) {
-                    if newit.clone().following_match() {
-                        *ctx = newit;
-                    }
+                if c.matches(&mut newit) && newit.clone().following_match() {
+                    *ctx = newit;
                 }
                 true
-            },
+            }
             MatchCase::AnyOne => ctx.next_char().is_some(),
             MatchCase::OneOrMore { case, lazy } => {
                 if !case.matches(ctx) {
@@ -129,16 +120,14 @@ impl MatchCase {
                 }
 
                 case.star_loop(ctx, *lazy)
-            },
-            MatchCase::Star { case, lazy } => {
-                case.star_loop(ctx, *lazy)
-            },
+            }
+            MatchCase::Star { case, lazy } => case.star_loop(ctx, *lazy),
             MatchCase::Start => ctx.char_offset() == 0,
             MatchCase::End => ctx.next_char().is_none(),
-            MatchCase::Between(start,end) => {
+            MatchCase::Between(start, end) => {
                 let c = next!();
-                let (start,end) = if ctx.conf().case_sensitive {
-                    (*start,*end)
+                let (start, end) = if ctx.conf().case_sensitive {
+                    (*start, *end)
                 } else {
                     (
                         start.to_lowercase().next().unwrap_or(*start),
@@ -146,20 +135,16 @@ impl MatchCase {
                     )
                 };
                 c >= start && c <= end
-            },
-            MatchCase::Not(match_case) => {
-                match ctx.peek_char() {
-                    Some(_) => !match_case.matches(ctx),
-                    None => false,
-                }
+            }
+            MatchCase::Not(match_case) => match ctx.peek_char() {
+                Some(_) => !match_case.matches(ctx),
+                None => false,
             },
             MatchCase::CharMatch(cases) => {
-                let ret = cases.iter().any(|case| {
-                    case.matches(&mut ctx.clone())
-                });
+                let ret = cases.iter().any(|case| case.matches(&mut ctx.clone()));
                 ctx.next_char();
                 ret
-            },
+            }
             MatchCase::RangeLoop { case, min, max } => {
                 let mut n = 0;
 
@@ -181,28 +166,27 @@ impl MatchCase {
                     if case.matches(&mut it) {
                         *ctx = it;
                     } else {
-                        break
+                        break;
                     }
 
                     n += 1;
                 }
 
                 true
-            },
+            }
             MatchCase::Capture(n) => {
                 let case_sensitive = ctx.conf().case_sensitive;
-                ctx
-                .get_capture(*n)
-                .chars()
-                .map(|c| {
-                    if case_sensitive {
-                        c
-                    } else {
-                        c.to_lowercase().next().unwrap_or(c)
-                    }
-                })
-                .all(|c| next!() == c)
-            },
+                ctx.get_capture(*n)
+                    .chars()
+                    .map(|c| {
+                        if case_sensitive {
+                            c
+                        } else {
+                            c.to_lowercase().next().unwrap_or(c)
+                        }
+                    })
+                    .all(|c| next!() == c)
+            }
         }
     }
 }

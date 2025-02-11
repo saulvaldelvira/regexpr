@@ -22,12 +22,12 @@ fn main() {
                 println!("No matches");
             } else {
                 println!("=== Matches ===");
-                for (i,m) in (&mut it).enumerate() {
+                for (i, m) in (&mut it).enumerate() {
                     println!("{}) {m}", i + 1);
                 }
                 if it.get_groups().iter().any(|l| !l.is_empty()) {
                     println!("===== Groups ======");
-                    for (i,m) in it.get_groups().iter().enumerate() {
+                    for (i, m) in it.get_groups().iter().enumerate() {
                         println!("{}) \"{m}\"", i + 1);
                     }
                 }

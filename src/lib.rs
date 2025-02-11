@@ -73,14 +73,14 @@
     unused_must_use
 )]
 #![warn(clippy::pedantic)]
-
+#![allow(clippy::must_use_candidate)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
 extern crate alloc;
 
-use alloc::boxed::Box;
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::string::String;
 
 use core::fmt::Display;
@@ -91,13 +91,13 @@ use case::MatchCase;
 mod compiler;
 use compiler::RegexCompiler;
 
-mod matcher;
 mod error;
+mod matcher;
 pub use error::RegexError;
-type Result<T> = core::result::Result<T,RegexError>;
+type Result<T> = core::result::Result<T, RegexError>;
 
 #[doc(inline)]
-pub use matcher::{RegexMatch,RegexMatcher};
+pub use matcher::{RegexMatch, RegexMatcher};
 
 /// Main Regex struct
 ///
@@ -122,14 +122,14 @@ impl Display for Regex {
     }
 }
 
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct RegexConf {
-    pub case_sensitive: bool
+    pub case_sensitive: bool,
 }
 
 const DEFAULT_REGEX_CONF: RegexConf = RegexConf {
-    case_sensitive: true
+    case_sensitive: true,
 };
 
 impl Regex {
@@ -150,14 +150,14 @@ impl Regex {
     /// [`matches`]: RegexMatch
     #[must_use]
     #[inline]
-    pub fn find_matches<'a>(&'a self, src: &'a str) -> RegexMatcher<'a>  {
+    pub fn find_matches<'a>(&'a self, src: &'a str) -> RegexMatcher<'a> {
         self.find_matches_with_conf(src, DEFAULT_REGEX_CONF)
     }
 
     /// Just like [`find_matches`](Self::find_matches), but uses a different configuration
     #[must_use]
     #[inline]
-    pub fn find_matches_with_conf<'a>(&'a self, src: &'a str, conf: RegexConf) -> RegexMatcher<'a>  {
+    pub fn find_matches_with_conf<'a>(&'a self, src: &'a str, conf: RegexConf) -> RegexMatcher<'a> {
         RegexMatcher::new(src, &self.matches, self.n_captures, conf)
     }
 
@@ -197,8 +197,8 @@ pub trait RegexTestable {
 impl RegexTestable for &str {
     fn matches_regex(&self, regex: &str) -> bool {
         Regex::compile(regex)
-              .map(|regex| regex.test(self))
-              .unwrap_or(false)
+            .map(|regex| regex.test(self))
+            .unwrap_or(false)
     }
 }
 
@@ -207,21 +207,21 @@ pub trait ReplaceRegex {
     ///
     /// # Errors
     /// If the regex fails to compile
-    fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a,str>>;
+    fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a, str>>;
 }
 
 impl ReplaceRegex for &str {
-    fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a,str>> {
+    fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a, str>> {
         let regex = Regex::compile(regex)?;
         let matches = regex.find_matches(self);
         if matches.clone().next().is_none() {
-            return Ok(Cow::Borrowed(self))
+            return Ok(Cow::Borrowed(self));
         }
 
         let mut result = String::new();
         let mut curr = 0;
         for m in matches {
-            let (start,end) = m.span();
+            let (start, end) = m.span();
             result.push_str(&self[curr..start]);
             result.push_str(replacement);
             curr = end;

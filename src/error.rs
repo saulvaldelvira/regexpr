@@ -1,14 +1,16 @@
+use alloc::string::String;
 use core::error::Error;
 use core::fmt::Display;
-use alloc::string::String;
 
 use alloc::borrow::Cow;
 
 #[derive(Debug)]
-pub struct RegexError(Cow<'static,str>);
+pub struct RegexError(Cow<'static, str>);
 
 impl RegexError {
-    pub fn inner(&self) -> &Cow<'static,str> {
+    #[inline]
+    #[must_use]
+    pub fn inner(&self) -> &Cow<'static, str> {
         &self.0
     }
 }
@@ -25,8 +27,8 @@ impl From<String> for RegexError {
     }
 }
 
-impl From<Cow<'static,str>> for RegexError {
-    fn from(value: Cow<'static,str>) -> Self {
+impl From<Cow<'static, str>> for RegexError {
+    fn from(value: Cow<'static, str>) -> Self {
         RegexError(value)
     }
 }
@@ -37,4 +39,4 @@ impl Display for RegexError {
     }
 }
 
-impl Error for RegexError { }
+impl Error for RegexError {}
