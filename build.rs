@@ -18,7 +18,7 @@ fn main() {
               e => panic!("{:?}", e),
           },
           |bindings| {
-              bindings.write_to_file("target/include/bindings.h");
+              bindings.write_to_file("target/include/regexpr.h");
           },
       );
 }
