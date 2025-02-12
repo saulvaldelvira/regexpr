@@ -1,3 +1,7 @@
 Regexpr
 =======
-Rust library for regular expressions
+Regular expressions library for rust.
+
+== Documentation ==
+You can build the documentation with `cargo doc`
+or browse it online at https://docs.rs/regexpr
