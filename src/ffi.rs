@@ -60,10 +60,10 @@ pub unsafe extern "C" fn regex_test_with_conf(
 /// 2) src is a valid NULL terminated C-String
 /// 3) You call `regex_matcher_free` on the returned pointer after you're done
 #[no_mangle]
-pub unsafe extern "C" fn regex_find_matches(
+pub unsafe extern "C" fn regex_find_matches<'a>(
     regex: *const Regex,
     src: *const c_char,
-) -> *mut RegexMatcher<'static> {
+) -> *mut RegexMatcher<'a> {
     regex_find_matches_with_conf(regex, src, DEFAULT_REGEX_CONF)
 }
 
@@ -75,11 +75,11 @@ pub unsafe extern "C" fn regex_find_matches(
 /// 2) src is a valid NULL terminated C-String
 /// 3) You call `regex_matcher_free` on the returned pointer after you're done
 #[no_mangle]
-pub unsafe extern "C" fn regex_find_matches_with_conf(
+pub unsafe extern "C" fn regex_find_matches_with_conf<'a>(
     regex: *const Regex,
     src: *const c_char,
     conf: RegexConf,
-) -> *mut RegexMatcher<'static> {
+) -> *mut RegexMatcher<'a> {
     let src = unsafe { CStr::from_ptr(src) };
     let Ok(src) = src.to_str() else {
         return ptr::null_mut();
