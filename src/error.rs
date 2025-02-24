@@ -33,6 +33,18 @@ impl From<Cow<'static, str>> for RegexError {
     }
 }
 
+impl From<RegexError> for Cow<'static,str> {
+    fn from(val: RegexError) -> Self {
+        val.0
+    }
+}
+
+impl From<RegexError> for String {
+    fn from(val: RegexError) -> Self {
+        val.0.into_owned()
+    }
+}
+
 impl Display for RegexError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.0)
