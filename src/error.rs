@@ -33,7 +33,7 @@ impl From<Cow<'static, str>> for RegexError {
     }
 }
 
-impl From<RegexError> for Cow<'static,str> {
+impl From<RegexError> for Cow<'static, str> {
     fn from(val: RegexError) -> Self {
         val.0
     }

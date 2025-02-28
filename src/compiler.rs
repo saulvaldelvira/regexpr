@@ -2,9 +2,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::str::Chars;
 
-use crate::case::MatchCase;
 use crate::Regex;
 use crate::Result;
+use crate::case::MatchCase;
 
 type OrList = Vec<MatchCase>;
 type RegexCompilerScope = (Vec<MatchCase>, Option<OrList>, Option<usize>);

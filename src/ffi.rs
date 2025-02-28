@@ -1,8 +1,11 @@
 //! C bindings
 
-use crate::{Regex, RegexConf, RegexMatcher, DEFAULT_REGEX_CONF};
-use std::ffi::{c_char, c_ulong, CStr};
-use std::ptr;
+use crate::{DEFAULT_REGEX_CONF, Regex, RegexConf, RegexMatcher};
+use core::ffi::{CStr, c_char, c_ulong};
+use core::ptr;
+
+extern crate alloc;
+use alloc::boxed::Box;
 
 /// Compile the given string into a regex
 ///
@@ -10,7 +13,7 @@ use std::ptr;
 /// Ensure that.
 /// 1) src is a valid NULL terminated C-String
 /// 2) out is a valid pointer to a destination Regex struct
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_compile(src: *const c_char) -> *mut Regex {
     let src = unsafe { CStr::from_ptr(src) };
     let Ok(src) = src.to_str() else {
@@ -29,9 +32,9 @@ pub unsafe extern "C" fn regex_compile(src: *const c_char) -> *mut Regex {
 /// Ensure that.
 /// 1) regex is a valid pointer to a Regex struct
 /// 2) src is a valid NULL terminated C-String
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_test(regex: *const Regex, src: *const c_char) -> bool {
-    regex_test_with_conf(regex, src, DEFAULT_REGEX_CONF)
+    unsafe { regex_test_with_conf(regex, src, DEFAULT_REGEX_CONF) }
 }
 
 /// Same as [`regex_test`] but with a custom configuration
@@ -40,7 +43,7 @@ pub unsafe extern "C" fn regex_test(regex: *const Regex, src: *const c_char) -> 
 /// Ensure that.
 /// 1) regex is a valid pointer to a Regex struct
 /// 2) src is a valid NULL terminated C-String
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_test_with_conf(
     regex: *const Regex,
     src: *const c_char,
@@ -59,12 +62,12 @@ pub unsafe extern "C" fn regex_test_with_conf(
 /// 1) regex is a valid pointer to a Regex struct
 /// 2) src is a valid NULL terminated C-String
 /// 3) You call `regex_matcher_free` on the returned pointer after you're done
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_find_matches<'a>(
     regex: *const Regex,
     src: *const c_char,
 ) -> *mut RegexMatcher<'a> {
-    regex_find_matches_with_conf(regex, src, DEFAULT_REGEX_CONF)
+    unsafe { regex_find_matches_with_conf(regex, src, DEFAULT_REGEX_CONF) }
 }
 
 /// Same as [`regex_find_matches`] but with a custom configuration
@@ -74,7 +77,7 @@ pub unsafe extern "C" fn regex_find_matches<'a>(
 /// 1) regex is a valid pointer to a Regex struct
 /// 2) src is a valid NULL terminated C-String
 /// 3) You call `regex_matcher_free` on the returned pointer after you're done
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_find_matches_with_conf<'a>(
     regex: *const Regex,
     src: *const c_char,
@@ -105,16 +108,18 @@ pub struct Span {
 /// Ensure that.
 /// 1) matcher is a valid pointer to a `RegexMatcher`
 /// 2) span is a valid pointer to a Span struct
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_matcher_next(
     matcher: *mut RegexMatcher<'_>,
     span: *mut Span,
 ) -> bool {
     match unsafe { &mut *matcher }.next() {
         Some(m) => {
-            *span = Span {
-                offset: m.span().0 as c_ulong,
-                len: m.slice().len() as c_ulong,
+            unsafe {
+                *span = Span {
+                    offset: m.span().0 as c_ulong,
+                    len: m.slice().len() as c_ulong,
+                }
             };
             true
         }
@@ -126,9 +131,11 @@ pub unsafe extern "C" fn regex_matcher_next(
 ///
 /// # Safety
 /// Ensure that matcher is a valid pointer
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_matcher_free(matcher: *mut RegexMatcher<'_>) {
-    drop(Box::from_raw(matcher));
+    unsafe {
+        drop(Box::from_raw(matcher));
+    }
 }
 
 /// Frees the regex structure
@@ -136,8 +143,8 @@ pub unsafe extern "C" fn regex_matcher_free(matcher: *mut RegexMatcher<'_>) {
 /// # Safety
 /// Ensure that.
 /// 1) regex is a valid pointer to a Regex struct that HAS NOT BEEN FREED before
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn regex_free(regex: *mut Regex) {
-    let r = Box::from_raw(regex);
+    let r = unsafe { Box::from_raw(regex) };
     drop(r);
 }

@@ -8,7 +8,7 @@
 
 use std::borrow::Cow;
 
-use crate::{Regex, RegexConf, RegexTestable, ReplaceRegex, DEFAULT_REGEX_CONF};
+use crate::{DEFAULT_REGEX_CONF, Regex, RegexConf, RegexTestable, ReplaceRegex};
 
 fn template_with_conf(regex: &str, conf: RegexConf, must_pass: &[&str], must_fail: &[&str]) {
     let regex = Regex::compile(regex).unwrap();
