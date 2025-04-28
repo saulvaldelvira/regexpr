@@ -1,8 +1,10 @@
-use std::io::{Write, stdin, stdout};
+#[cfg(feature = "gui")]
+mod gui;
 
-use regexpr::Regex;
-
-fn main() {
+#[cfg(not(feature = "gui"))]
+fn start_tui() {
+    use regexpr::Regex;
+    use std::io::{Write, stdin, stdout};
     loop {
         print!("Enter a regular expression: ");
         stdout().flush().unwrap();
@@ -39,4 +41,15 @@ fn main() {
 
         println!();
     }
+}
+
+pub fn main() {
+    #[cfg(feature = "gui")]
+    gui::start_gui().unwrap_or_else(|err| {
+        eprintln!("ERROR: {err}");
+        std::process::exit(1);
+    });
+
+    #[cfg(not(feature = "gui"))]
+    start_tui();
 }

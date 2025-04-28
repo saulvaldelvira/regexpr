@@ -14,6 +14,7 @@ path = "src/lib.rs"
 crate-type = [ "lib", "cdylib", "staticlib" ]
 
 [dependencies]
+fltk = { version = "1.4", optional = true }
 
 [build-dependencies.cbindgen]
 version = ">=0.27.0"
@@ -24,3 +25,5 @@ default-features = false
 default = ["std"]
 std = []
 bindings = ["dep:cbindgen"]
+gui = ["dep:fltk"]
+use-bundled-fltk = ["fltk/fltk-bundled"]
