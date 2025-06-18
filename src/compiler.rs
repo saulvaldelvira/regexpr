@@ -177,7 +177,7 @@ impl<'a> RegexCompiler<'a> {
                 self.accc.push((Vec::new(), opt, cid));
             }
             None => unreachable!(),
-        };
+        }
     }
     fn escape(&mut self, c: char) -> Result<MatchCase> {
         let mut is_cap = self.chars.clone().next().is_some_and(char::is_numeric);

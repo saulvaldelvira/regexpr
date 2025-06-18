@@ -139,7 +139,7 @@ pub(crate) struct RegexCtx<'a> {
     following: &'a [MatchCase],
     conf: RegexConf,
     nc: CharIndices<'a>,
-    open_captures: Cow<'a, Vec<(usize, CharIndices<'a>)>>,
+    open_captures: Cow<'a, [(usize, CharIndices<'a>)]>,
 }
 
 fn __next(conf: RegexConf, chrs: &mut CharIndices<'_>) -> Option<char> {
