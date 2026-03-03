@@ -59,7 +59,7 @@ impl<'a> RegexMatcher<'a> {
             cases: matches,
             ctx: RegexCtx {
                 captures: Cow::Owned(captures),
-                following: matches,
+                following: Cow::Owned(vec![matches]),
                 conf,
                 nc: src.char_indices(),
                 open_captures: Cow::Owned(Vec::new()),
@@ -107,7 +107,7 @@ impl<'a> Iterator for RegexMatcher<'a> {
         self.first = false;
 
         let mut chars = self.ctx.clone();
-        chars.following = self.cases;
+        chars.following = vec![self.cases].into();
         if !chars.following_match() {
             return match self.ctx.nc.next() {
                 Some(_) => self.next(),
@@ -136,7 +136,7 @@ impl FusedIterator for RegexMatcher<'_> {}
 #[derive(Clone, Debug)]
 pub(crate) struct RegexCtx<'a> {
     captures: Cow<'a, Box<[&'a str]>>,
-    following: &'a [MatchCase],
+    following: Cow<'a, [&'a [MatchCase]]>,
     conf: RegexConf,
     nc: CharIndices<'a>,
     open_captures: Cow<'a, [(usize, CharIndices<'a>)]>,
@@ -165,9 +165,30 @@ impl<'a> RegexCtx<'a> {
     pub fn conf(&self) -> RegexConf {
         self.conf
     }
+    pub fn enter_scope(&mut self, cases: &'a [MatchCase]) {
+        self.following.to_mut().push(cases);
+    }
+    pub fn exit_scope(&mut self) {
+        self.following.to_mut().pop();
+    }
 
-    fn next_case(&mut self) {
-        self.following = self.following.get(1..).unwrap_or(&[]);
+    fn next_case(&mut self) -> Option<&'a MatchCase> {
+        match self.following.last() {
+            Some(last) => {
+                if last.is_empty() {
+                    self.following.to_mut().pop();
+                    self.pop_capture();
+                    self.next_case()
+                } else {
+                    let ret = &last[0];
+                    *self.following.to_mut().last_mut().unwrap_or_else(|| {
+                        unreachable!("We've checked that self.following has at least one element")
+                    }) = last.get(1..).unwrap_or(&[]);
+                    Some(ret)
+                }
+            }
+            None => None,
+        }
     }
     pub fn get_capture(&self, id: usize) -> &'a str {
         let id = id.wrapping_sub(1);
@@ -189,12 +210,13 @@ impl<'a> RegexCtx<'a> {
         /*     }); */
     }
     pub fn pop_capture(&mut self) {
+        self.update_open_captures();
         self.open_captures.to_mut().pop();
     }
     pub fn has_following(&self) -> bool {
         !self.following.is_empty()
     }
-    pub fn update_open_captures(&mut self) {
+    fn update_open_captures(&mut self) {
         for (id, chars) in self.open_captures.to_mut() {
             let len = self.nc.offset() - chars.offset();
             let slice = &chars.as_str()[..len];
@@ -202,9 +224,8 @@ impl<'a> RegexCtx<'a> {
         }
     }
     pub fn following_match(&mut self) -> bool {
-        let cases = self.following;
-        for case in cases {
-            self.next_case();
+        self.update_open_captures();
+        while let Some(case) = self.next_case() {
             if !case.matches(self) {
                 return false;
             }

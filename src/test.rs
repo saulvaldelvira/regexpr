@@ -67,6 +67,16 @@ fn opt() {
 fn star() {
     template("a(abc)*c", &["aabcc", "ac", "aabcabcc"], &["abbc"]);
     template(".*", &["", "daksd"], &[]);
+    template(
+        "a(1.*2)b",
+        &["a12b", "a1salk2b", "a112212b"],
+        &["a1b", "a22b"],
+    );
+    template(
+        "a(1.*2)b \\1$",
+        &["a12b 12", "a1salk2b 1salk2", "a112212b 112212"],
+        &["a1b", "a22b"],
+    );
 }
 
 #[test]

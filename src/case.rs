@@ -43,7 +43,6 @@ impl MatchCase {
             let mut it = ctx.clone();
             if self.matches(&mut it) {
                 *ctx = it;
-                ctx.update_open_captures();
             } else {
                 return true;
             }
@@ -60,7 +59,6 @@ impl MatchCase {
             let mut it = ctx.clone();
             if self.matches(&mut it) {
                 *ctx = it;
-                ctx.update_open_captures();
             } else {
                 if let Some(it) = last_next_match {
                     *ctx = it;
@@ -70,7 +68,6 @@ impl MatchCase {
         }
     }
     fn star_loop<'a>(&'a self, ctx: &mut RegexCtx<'a>, lazy: bool) -> bool {
-        ctx.update_open_captures();
         if lazy {
             self.lazy_star_loop(ctx)
         } else {
@@ -93,11 +90,21 @@ impl MatchCase {
             MatchCase::Group { case, capture_id } => {
                 ctx.push_capture(*capture_id);
                 let ret = case.matches(ctx);
-                ctx.update_open_captures();
                 ctx.pop_capture();
                 ret
             }
-            MatchCase::List(cases) => cases.iter().all(|rule| rule.matches(ctx)),
+            MatchCase::List(cases) => {
+                for i in 0..cases.len() {
+                    let rem = cases.get(i + 1..).unwrap_or(&[]);
+                    ctx.enter_scope(rem);
+                    let is_match = cases[i].matches(ctx);
+                    ctx.exit_scope();
+                    if !is_match {
+                        return false;
+                    }
+                }
+                true
+            }
             MatchCase::Or(l) => l.iter().any(|rule| {
                 let mut newit = ctx.clone();
                 let ret = rule.matches(&mut newit);
@@ -123,7 +130,7 @@ impl MatchCase {
             }
             MatchCase::Star { case, lazy } => case.star_loop(ctx, *lazy),
             MatchCase::Start => ctx.char_offset() == 0,
-            MatchCase::End => ctx.next_char().is_none(),
+            MatchCase::End => dbg!(ctx.next_char()).is_none(),
             MatchCase::Between(start, end) => {
                 let c = next!();
                 let (start, end) = if ctx.conf().case_sensitive {
