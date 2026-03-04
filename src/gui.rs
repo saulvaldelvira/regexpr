@@ -1,25 +1,30 @@
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
 use std::cell::RefCell;
-use std::fmt::Write;
 use std::rc::Rc;
 
 use fltk::app::Scheme;
-use fltk::enums::{CallbackTrigger, Event, Shortcut};
-use fltk::group::Group;
+use fltk::enums::{Align, CallbackTrigger, Color, Event, FrameType, Shortcut};
+use fltk::frame::Frame;
+use fltk::group::{Group, Pack, PackType};
 use fltk::menu::{MenuBar, MenuFlag};
-use fltk::text::TextDisplay;
 use fltk::{prelude::*, *};
 use regexpr::Regex;
 
+struct Match {
+    offset: usize,
+    str: String,
+}
+
 struct State {
     regex: Regex,
+    matches: Vec<Match>,
 }
 
 #[derive(Clone)]
 struct Splitter {
     left: text::TextEditor,
-    right: text::TextDisplay,
+    right: Rc<RefCell<group::Scroll>>,
     divider: frame::Frame,
     dragging: bool,
     state: Rc<RefCell<State>>,
@@ -34,47 +39,51 @@ impl Splitter {
 
         let divider = frame::Frame::new(x + w / 2 - 2, y, 4, h, None);
 
-        let mut right = text::TextDisplay::new(x + w / 2 + 2, y, w / 2 - 2, h, None);
-        right.set_buffer(text::TextBuffer::default());
-        right.wrap_mode(text::WrapMode::AtBounds, 0);
+        let mut right = group::Scroll::new(x + w / 2 + 2, y, w / 2 - 2, h, None);
+        right.set_frame(enums::FrameType::NoBox);
+        right.set_scrollbar_size(20);
+        right.clear();
+        right.end();
+        /* right.set_buffer(text::TextBuffer::default()); */
+        /* right.wrap_mode(text::WrapMode::AtBounds, 0); */
 
-        let group = Group::new(10, MENU_HEIGHT, 790, REGEX_HEIGHT, "");
+        let group = Group::new(10, MENU_HEIGHT, w - 20, REGEX_HEIGHT, "regex");
+        /* let mut td = TextDisplay::new(10, MENU_HEIGHT, 240, REGEX_HEIGHT, ": "); */
+        /* td.set_buffer(text::TextBuffer::default()); */
+        /* td.buffer().unwrap().set_text("Enter regex: "); */
+        let mut regex_input = input::Input::new(10, MENU_HEIGHT, w - 20 - 50, REGEX_HEIGHT, "");
 
-        let mut td = TextDisplay::new(10, MENU_HEIGHT, 60, REGEX_HEIGHT, ": ");
-        td.set_buffer(text::TextBuffer::default());
-        td.buffer().unwrap().set_text("Enter regex: ");
-        let mut regex_input = input::Input::new(70, MENU_HEIGHT, 790 - 60, REGEX_HEIGHT, "");
+        let mut btn = button::Button::new(10 + w - 20 - 50 + 5, MENU_HEIGHT, 40, REGEX_HEIGHT, "");
+        btn.set_label("match");
 
         group.end();
 
-
         regex_input.set_trigger(CallbackTrigger::Changed);
 
-        let mut spl = Self {
+        let spl = Self {
             left,
-            right,
+            right: Rc::new(RefCell::new(right)),
             divider,
             state,
             regex_input,
             dragging: false,
         };
 
-        spl.regex_input.set_callback({
+        btn.set_callback({
             let spl = spl.clone();
             move |_| {
                 let regex = spl.regex_input.value();
                 let regex = Regex::compile(&regex).unwrap();
                 spl.state.borrow_mut().regex = regex;
-                spl.process()
+                spl.process();
             }
         });
-
-        spl.left.set_callback({
-            let spl = spl.clone();
-            move |_| {
-                spl.process()
-            }
-        });
+        /* spl.left.set_callback({ */
+        /*     let spl = spl.clone(); */
+        /*     move |_| { */
+        /*         spl.process() */
+        /*     } */
+        /* }); */
 
         spl
     }
@@ -88,19 +97,24 @@ impl Splitter {
             Event::Drag if self.dragging => {
                 let x = app::event_coords().0;
                 let min_x = self.left.x() + 50;
-                let max_x = self.right.x() + self.right.w() - 50;
+
+                let mut scroll = self.right.borrow_mut();
+
+                let max_x = scroll.x() + scroll.w() - 50;
 
                 if x >= min_x && x <= max_x {
                     let left_w = x - self.left.x();
-                    let right_w = self.right.x() + self.right.w() - x - 4;
+                    let right_w = scroll.x() + scroll.w() - x - 4;
 
                     self.left.resize(self.left.x(), self.left.y(), left_w, self.left.h());
                     self.divider.resize(x, self.divider.y(), 4, self.divider.h());
-                    self.right.resize(x + 4, self.right.y(), right_w, self.right.h());
+                    let scry = scroll.y();
+                    let scrh = scroll.h();
+                    scroll.resize(x + 4, scry, right_w, scrh);
 
                     self.left.redraw();
                     self.divider.redraw();
-                    self.right.redraw();
+                    scroll.redraw();
                 }
                 true
             }
@@ -116,15 +130,68 @@ impl Splitter {
         if let Some(buf) = self.left.buffer() {
             let text = buf.text();
 
-            let state = self.state.borrow();
-            let matches = state.regex.find_matches(&text);
+            let mut state = self.state.borrow_mut();
+            let State { regex, matches } = &mut *state;
+            matches.clear();
+            matches.extend(
+                regex.find_matches(&text).map(|m| {
+                    Match { offset: m.span().0, str: m.slice().to_string() }
+                })
+            );
 
-            let mut s = "".to_string();
+
+            let mut scroll = self.right.borrow_mut();
+            let width = scroll.width() - scroll.scrollbar_size() - 20;
+
+            let mut pack = Pack::new(5, 10, width, 0, "");
+            pack.set_spacing(5);
+            pack.set_type(PackType::Vertical);
             for m in matches {
-                writeln!(s, "{}:{}", m.span().0, m.span().1).unwrap();
-            }
+                let label_text = format!("[{}:{}] {}", m.offset, m.offset + m.str.len(), m.str);
 
-            self.right.buffer().unwrap().set_text(&s);
+                let mut frame = Frame::new(0, 0, width, 25, Some(&*label_text));
+                frame.set_callback({
+                    let (x, y) = (scroll.x(), scroll.y());
+                    move |_| {
+                        let mut f = Frame::new(x - 50, y + 40, 300, 500, "Info");
+                        f.redraw();
+                    }
+                });
+                frame.set_frame(FrameType::DownBox);
+                frame.set_color(Color::from_rgb(240, 240, 255));
+                frame.set_label_size(14);
+                frame.set_align(Align::Left | Align::Inside);
+
+                pack.add(&frame);
+            }
+            pack.end();
+            scroll.clear();
+            scroll.add(&pack);
+            scroll.redraw();
+
+            /* let matches = state.regex.find_matches(&text); */
+
+            /* scroll.clear(); */
+
+
+            /* for m in matches { */
+            /*     let label_text = format!("{}:{}", m.span().0, m.span().1); */
+
+            /*     let mut frame = Frame::new(0, 0, width, 25, Some(&*label_text)); */
+            /*     frame.set_frame(FrameType::DownBox); */
+            /*     frame.set_color(Color::from_rgb(240, 240, 255)); */
+            /*     frame.set_label_size(14); */
+            /*     frame.set_align(Align::Left | Align::Inside); */
+
+            /*     pack.add(&frame); */
+            /* } */
+
+            /* pack.end(); */
+
+            /* scroll.add(&pack); */
+
+            /* scroll.redraw(); */
+            /* scroll.scroll_to(0, 0); */
         }
     }
 }
@@ -132,7 +199,7 @@ impl Splitter {
 const MENU_HEIGHT: i32 = 25;
 const INITIAL_WIDTH: i32 = 800;
 const INITIAL_HEIGHT: i32 = 600;
-const REGEX_HEIGHT: i32 = 40;
+const REGEX_HEIGHT: i32 = 30;
 const STATUS_HEIGHT: i32 = 25;
 
 fn menu_bar() {
@@ -158,6 +225,7 @@ pub fn start_gui() -> Result<(), String> {
 
     let state = State {
         regex: Regex::compile("").unwrap(),
+        matches: vec![],
     };
     let state = Rc::new(RefCell::new(state));
 
