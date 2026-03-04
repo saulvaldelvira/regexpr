@@ -240,6 +240,16 @@ fn capture() {
 }
 
 #[test]
+fn named_capture() {
+    template(
+        "^ab(?<twoch>..)c\\k<twoch>$",
+        &["ab12c12"],
+        &["ab1c2", "ab2c1"],
+    );
+    template("^ab(?<guion>-.+-)c\\k<guion>$", &["ab-123-c-123-"], &[]);
+}
+
+#[test]
 fn capture_or() {
     template(
         "^(abc|def)123\\1$",

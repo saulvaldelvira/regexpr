@@ -1,6 +1,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::str::Chars;
+use std::collections::HashMap;
 
 use crate::Regex;
 use crate::Result;
@@ -13,6 +14,7 @@ pub struct RegexCompiler<'a> {
     chars: Chars<'a>,
     open: usize,
     accc: Vec<RegexCompilerScope>,
+    captures_map: HashMap<String, usize>,
     n_captures: usize,
 }
 
@@ -23,19 +25,38 @@ impl<'a> RegexCompiler<'a> {
             open: 0,
             accc: Vec::new(),
             n_captures: 0,
+            captures_map: HashMap::new(),
         };
-        compiler.enter_scope(false);
+        compiler
+            .enter_scope(false)
+            .unwrap_or_else(|_| unreachable!());
         compiler
     }
-    fn enter_scope(&mut self, capt: bool) {
+    fn enter_scope(&mut self, capt: bool) -> Result<()> {
         self.open += 1;
         let cid = if capt {
             self.n_captures += 1;
+
+            if self.chars.clone().next().is_some_and(|c| c == '?') {
+                self.chars.next();
+                if self.chars.next().is_none_or(|c| c != '<') {
+                    return Err("Expected an opening '<'".into());
+                }
+                let Some(close) = self.chars.as_str().find('>') else {
+                    return Err("Expected closing '<'".into());
+                };
+                let name = self.chars.as_str()[..close].to_string();
+                for _ in 0..=close {
+                    self.chars.next();
+                }
+                self.captures_map.insert(name, self.n_captures);
+            }
             Some(self.n_captures)
         } else {
             None
         };
         self.accc.push((Vec::new(), None, cid));
+        Ok(())
     }
     fn close_scope(&mut self) -> MatchCase {
         self.open -= 1;
@@ -186,27 +207,43 @@ impl<'a> RegexCompiler<'a> {
     fn escape(&mut self, c: char) -> Result<MatchCase> {
         let mut is_cap = self.chars.clone().next().is_some_and(char::is_numeric);
 
-        let mut arrrows = false;
-        if !is_cap && self.chars.as_str().strip_prefix("k<").is_some() {
+        let mut named = false;
+        if !is_cap && self.chars.as_str().starts_with("k<") {
             self.chars.next();
             self.chars.next();
             is_cap = true;
-            arrrows = true;
+            named = true;
         }
 
         let case = if is_cap {
             let mut captn = 0;
-            while let Some(n) = self.chars.clone().next() {
-                if !n.is_numeric() {
-                    if arrrows && self.next(c)? != '>' {
-                        return Err("Expected closing '>'".into());
+            if named {
+                let Some(close) = self.chars.as_str().find('>') else {
+                    return Err("Expected closing '>'".into());
+                };
+                let name = &self.chars.as_str()[..close];
+                if let Ok(id) = name.parse::<usize>() {
+                    captn = id;
+                } else {
+                    match self.captures_map.get(name) {
+                        Some(id) => captn = *id,
+                        None => return Err(format!("Unknown capture '{name}'").into()),
                     }
-                    break;
                 }
+                for _ in 0..=close {
+                    self.chars.next();
+                }
+                eprintln!("Rem: {:?}", self.chars.as_str());
+            } else {
+                while let Some(n) = self.chars.clone().next() {
+                    if !n.is_numeric() {
+                        break;
+                    }
 
-                captn = captn * 10 + (n as u8 - b'0') as usize;
+                    captn = captn * 10 + (n as u8 - b'0') as usize;
 
-                self.chars.next();
+                    self.chars.next();
+                }
             }
             if self.n_captures < captn {
                 return Err("Trying to recall uncaptured".into());
@@ -223,7 +260,7 @@ impl<'a> RegexCompiler<'a> {
                 '.' => MatchCase::AnyOne,
                 '\\' => self.escape(c)?,
                 '(' => {
-                    self.enter_scope(true);
+                    self.enter_scope(true)?;
                     continue;
                 }
                 ')' => self.close_scope(),
