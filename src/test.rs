@@ -80,6 +80,15 @@ fn star() {
 }
 
 #[test]
+fn repeat_star() {
+    template(
+        "a(1.*2){2,3}b \\1$",
+        &["a1212b 12", "a121212b 12", "a1uno21dos2b 1dos2"],
+        &[],
+    );
+}
+
+#[test]
 fn plus() {
     template("a+bc", &["abc", "aabc", "aaaabc", "ababc"], &["bc", "bbc"]);
 }

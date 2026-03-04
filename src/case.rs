@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
 
-use crate::matcher::RegexCtx;
+use crate::matcher::{FollowingMatches, RegexCtx};
 
 #[derive(Clone, Debug)]
 pub enum MatchCase {
@@ -96,7 +96,7 @@ impl MatchCase {
             MatchCase::List(cases) => {
                 for i in 0..cases.len() {
                     let rem = cases.get(i + 1..).unwrap_or(&[]);
-                    ctx.enter_scope(rem);
+                    ctx.enter_scope(FollowingMatches::List(rem));
                     let is_match = cases[i].matches(ctx);
                     ctx.exit_scope();
                     if !is_match {
@@ -130,7 +130,7 @@ impl MatchCase {
             }
             MatchCase::Star { case, lazy } => case.star_loop(ctx, *lazy),
             MatchCase::Start => ctx.char_offset() == 0,
-            MatchCase::End => dbg!(ctx.next_char()).is_none(),
+            MatchCase::End => ctx.next_char().is_none(),
             MatchCase::Between(start, end) => {
                 let c = next!();
                 let (start, end) = if ctx.conf().case_sensitive {
@@ -156,17 +156,23 @@ impl MatchCase {
                 let mut n = 0;
 
                 if let Some(min) = min {
-                    for _ in 0..*min {
+                    for i in 0..*min {
+                        ctx.enter_scope(FollowingMatches::Repeat {
+                            m: case,
+                            curr: i + 1,
+                            min: *min,
+                        });
                         if !case.matches(ctx) {
                             return false;
                         }
+                        ctx.exit_scope();
                         n += 1;
                     }
                 }
 
                 loop {
-                    if max.is_some_and(|max| n > max) {
-                        return false;
+                    if max.is_some_and(|max| n >= max) {
+                        break;
                     }
 
                     let mut it = ctx.clone();

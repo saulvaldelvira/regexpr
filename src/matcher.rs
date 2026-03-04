@@ -59,7 +59,7 @@ impl<'a> RegexMatcher<'a> {
             cases: matches,
             ctx: RegexCtx {
                 captures: Cow::Owned(captures),
-                following: Cow::Owned(vec![matches]),
+                following: Cow::Owned(vec![FollowingMatches::List(matches)]),
                 conf,
                 nc: src.char_indices(),
                 open_captures: Cow::Owned(Vec::new()),
@@ -107,7 +107,7 @@ impl<'a> Iterator for RegexMatcher<'a> {
         self.first = false;
 
         let mut chars = self.ctx.clone();
-        chars.following = vec![self.cases].into();
+        chars.following = vec![FollowingMatches::List(self.cases)].into();
         if !chars.following_match() {
             return match self.ctx.nc.next() {
                 Some(_) => self.next(),
@@ -134,9 +134,19 @@ impl<'a> Iterator for RegexMatcher<'a> {
 impl FusedIterator for RegexMatcher<'_> {}
 
 #[derive(Clone, Debug)]
+pub enum FollowingMatches<'a> {
+    Repeat {
+        m: &'a MatchCase,
+        curr: usize,
+        min: usize,
+    },
+    List(&'a [MatchCase]),
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct RegexCtx<'a> {
     captures: Cow<'a, Box<[&'a str]>>,
-    following: Cow<'a, [&'a [MatchCase]]>,
+    following: Cow<'a, [FollowingMatches<'a>]>,
     conf: RegexConf,
     nc: CharIndices<'a>,
     open_captures: Cow<'a, [(usize, CharIndices<'a>)]>,
@@ -165,7 +175,7 @@ impl<'a> RegexCtx<'a> {
     pub fn conf(&self) -> RegexConf {
         self.conf
     }
-    pub fn enter_scope(&mut self, cases: &'a [MatchCase]) {
+    pub fn enter_scope(&mut self, cases: FollowingMatches<'a>) {
         self.following.to_mut().push(cases);
     }
     pub fn exit_scope(&mut self) {
@@ -174,19 +184,40 @@ impl<'a> RegexCtx<'a> {
 
     fn next_case(&mut self) -> Option<&'a MatchCase> {
         match self.following.last() {
-            Some(last) => {
-                if last.is_empty() {
-                    self.following.to_mut().pop();
-                    self.pop_capture();
-                    self.next_case()
-                } else {
-                    let ret = &last[0];
-                    *self.following.to_mut().last_mut().unwrap_or_else(|| {
-                        unreachable!("We've checked that self.following has at least one element")
-                    }) = last.get(1..).unwrap_or(&[]);
-                    Some(ret)
+            Some(fm) => match fm {
+                FollowingMatches::List(last) => {
+                    if last.is_empty() {
+                        self.following.to_mut().pop();
+                        self.pop_capture();
+                        self.next_case()
+                    } else {
+                        let ret = &last[0];
+                        *self.following.to_mut().last_mut().unwrap_or_else(|| {
+                            unreachable!(
+                                "We've checked that self.following has at least one element"
+                            )
+                        }) = FollowingMatches::List(last.get(1..).unwrap_or(&[]));
+                        Some(ret)
+                    }
                 }
-            }
+                FollowingMatches::Repeat { curr, min, .. } => {
+                    if *curr < *min {
+                        let FollowingMatches::Repeat { curr, m, .. } = self
+                            .following
+                            .to_mut()
+                            .last_mut()
+                            .unwrap_or_else(|| unreachable!())
+                        else {
+                            unreachable!()
+                        };
+                        *curr += 1;
+                        Some(m)
+                    } else {
+                        self.following.to_mut().pop();
+                        self.next_case()
+                    }
+                }
+            },
             None => None,
         }
     }
