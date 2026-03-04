@@ -23,6 +23,12 @@ pub enum MatchCase {
         case: Box<MatchCase>,
         lazy: bool,
     },
+    Whitespace,
+    NotWhitespace,
+    Decimal,
+    NotDecimal,
+    Word,
+    NotWord,
     Capture(usize),
     Between(char, char),
     CharMatch(Box<[MatchCase]>),
@@ -87,6 +93,18 @@ impl MatchCase {
 
         match self {
             MatchCase::Char(expected) => next!() == *expected,
+            MatchCase::Whitespace => next!().is_whitespace(),
+            MatchCase::NotWhitespace => !next!().is_whitespace(),
+            MatchCase::Decimal => next!().is_digit(10),
+            MatchCase::Word => {
+                let c = next!();
+                c.is_alphanumeric() || c == '_'
+            }
+            MatchCase::NotWord => {
+                let c = next!();
+                !c.is_alphanumeric() && c != '_'
+            }
+            MatchCase::NotDecimal => !next!().is_digit(10),
             MatchCase::Group { case, capture_id } => {
                 ctx.push_capture(*capture_id);
                 let ret = case.matches(ctx);

@@ -10,27 +10,32 @@ use std::borrow::Cow;
 
 use crate::{DEFAULT_REGEX_CONF, Regex, RegexConf, RegexTestable, ReplaceRegex};
 
-fn template_with_conf(regex: &str, conf: RegexConf, must_pass: &[&str], must_fail: &[&str]) {
-    let regex = Regex::compile(regex).unwrap();
-    for mp in must_pass {
-        if !regex.test_with_conf(mp, conf) {
-            panic!("Should've passed: \"{mp}\"");
+macro_rules! template_with_conf {
+    ($r:expr, $c:expr, $must_pass:expr, $must_fail:expr $(,)?) => {
+        let must_fail: &[&str] = $must_fail;
+        let regex = Regex::compile($r).expect("Regex failed to compile");
+        for mp in $must_pass {
+            if !regex.test_with_conf(mp, $c) {
+                panic!("Should've passed: \"{mp}\"");
+            }
         }
-    }
-    for mf in must_fail {
-        if regex.test_with_conf(mf, conf) {
-            panic!("Should've failed: \"{mf}\"");
+        for mf in must_fail {
+            if regex.test_with_conf(mf, $c) {
+                panic!("Should've failed: \"{mf}\"");
+            }
         }
-    }
+    };
 }
 
-fn template(regex: &str, must_pass: &[&str], must_fail: &[&str]) {
-    template_with_conf(regex, DEFAULT_REGEX_CONF, must_pass, must_fail);
+macro_rules! template {
+    ($r:expr, $must_pass:expr, $must_fail:expr $(,)?) => {
+        template_with_conf!($r, DEFAULT_REGEX_CONF, $must_pass, $must_fail)
+    };
 }
 
 #[test]
 fn abc() {
-    template(
+    template!(
         "abc",
         &["abc", "abcc", "aabc", "abcabc"],
         &["ab", "a", "bc"],
@@ -41,7 +46,7 @@ fn abc() {
 
 #[test]
 fn dot() {
-    template(
+    template!(
         "a..d",
         &["abcd", "a..d"],
         &["ad", "abd", "abcc", "aabc", "...."],
@@ -50,29 +55,29 @@ fn dot() {
 
 #[test]
 fn or() {
-    template("(abc|cba)", &["abc", "cba", "babc", "aabc"], &["cga"]);
+    template!("(abc|cba)", &["abc", "cba", "babc", "aabc"], &["cga"]);
 }
 
 #[test]
 fn opt() {
-    template(
+    template!(
         "head(opt-body)?tail",
         &["headtail", "headopt-bodytail"],
         &["headopt-body", "opt-bodytail"],
     );
-    template("a.?b", &["ab", "acb"], &["accb", "ac"]);
+    template!("a.?b", &["ab", "acb"], &["accb", "ac"]);
 }
 
 #[test]
 fn star() {
-    template("a(abc)*c", &["aabcc", "ac", "aabcabcc"], &["abbc"]);
-    template(".*", &["", "daksd"], &[]);
-    template(
+    template!("a(abc)*c", &["aabcc", "ac", "aabcabcc"], &["abbc"]);
+    template!(".*", &["", "daksd"], &[]);
+    template!(
         "a(1.*2)b",
         &["a12b", "a1salk2b", "a112212b"],
         &["a1b", "a22b"],
     );
-    template(
+    template!(
         "a(1.*2)b \\1$",
         &["a12b 12", "a1salk2b 1salk2", "a112212b 112212"],
         &["a1b", "a22b"],
@@ -81,7 +86,7 @@ fn star() {
 
 #[test]
 fn repeat_star() {
-    template(
+    template!(
         "a(1.*2){2,3}b \\1$",
         &["a1212b 12", "a121212b 12", "a1uno21dos2b 1dos2"],
         &[],
@@ -90,15 +95,15 @@ fn repeat_star() {
 
 #[test]
 fn plus() {
-    template("a+bc", &["abc", "aabc", "aaaabc", "ababc"], &["bc", "bbc"]);
+    template!("a+bc", &["abc", "aabc", "aaaabc", "ababc"], &["bc", "bbc"]);
 }
 
 #[test]
 fn start_end() {
-    template("abc", &["abc", "aabc", "abcc"], &[]);
-    template("^abc", &["abc", "abcc"], &["aabc"]);
-    template("abc$", &["abc", "aabc"], &["abcc"]);
-    template("^abc$", &["abc"], &["aabc", "abcc"]);
+    template!("abc", &["abc", "aabc", "abcc"], &[]);
+    template!("^abc", &["abc", "abcc"], &["aabc"]);
+    template!("abc$", &["abc", "aabc"], &["abcc"]);
+    template!("^abc$", &["abc"], &["aabc", "abcc"]);
 }
 
 #[test]
@@ -109,7 +114,7 @@ fn trait_test() {
 
 #[test]
 fn nested() {
-    template(
+    template!(
         "abc((dfg)+|(hij)+)?klm",
         &["abcdfgklm", "abcklm", "abcdfgklm"],
         &["abcdfghijklm"],
@@ -162,12 +167,12 @@ fn find_matches() {
 
 #[test]
 fn range() {
-    template(
+    template!(
         "^[a-z01]+$",
         &["avcd", "0101baba1"],
         &["avcdZZka", "0101baba91"],
     );
-    template(
+    template!(
         "^[^a-z01]+$",
         &["99882"],
         &["avcd", "0101baba1", "avcdZZka", "0101baba91"],
@@ -176,25 +181,25 @@ fn range() {
 
 #[test]
 fn min_max() {
-    template(
+    template!(
         "^a{3,5}$",
         &["aaa", "aaaa", "aaaaa"],
         &["a", "aa", "aaaaaa", "aaaaaaa"],
     );
 
-    template(
+    template!(
         "^a{6}$",
         &["aaaaaa"],
         &["a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaaa", "aaaaaaaa"],
     );
 
-    template(
+    template!(
         "^a{3,}$",
         &["aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"],
         &["a", "aa"],
     );
 
-    template(
+    template!(
         "^a{,5}$",
         &["a", "aa", "aaa", "aaaa", "aaaaa"],
         &["aaaaaa", "aaaaaaa"],
@@ -218,8 +223,8 @@ fn lazy() {
 
 #[test]
 fn capture() {
-    template("^ab(.)c\\1$", &["ab1c1", "ab2c2"], &["ab1c2", "ab2c1"]);
-    template(
+    template!("^ab(.)c\\1$", &["ab1c1", "ab2c2"], &["ab1c2", "ab2c1"]);
+    template!(
         "^ab( [a-z]* )c\\1$",
         &["ab abcd c abcd ", "ab ahc c ahc "],
         &[
@@ -232,7 +237,7 @@ fn capture() {
             "ab2c1",
         ],
     );
-    template(
+    template!(
         "^1(.*?)2\\1(.*?)3\\k<2>4$",
         &["1abc2abcdef3def4", "1abc2abc34"],
         &["1abc2abcd34"],
@@ -241,17 +246,17 @@ fn capture() {
 
 #[test]
 fn named_capture() {
-    template(
+    template!(
         "^ab(?<twoch>..)c\\k<twoch>$",
         &["ab12c12"],
         &["ab1c2", "ab2c1"],
     );
-    template("^ab(?<guion>-.+-)c\\k<guion>$", &["ab-123-c-123-"], &[]);
+    template!("^ab(?<guion>-.+-)c\\k<guion>$", &["ab-123-c-123-"], &[]);
 }
 
 #[test]
 fn capture_or() {
-    template(
+    template!(
         "^(abc|def)123\\1$",
         &["abc123abc", "def123def"],
         &["abc123def", "def123abc"],
@@ -260,7 +265,7 @@ fn capture_or() {
 
 #[test]
 fn case_sensitive() {
-    template_with_conf(
+    template_with_conf!(
         "abc[a-z]",
         RegexConf {
             case_sensitive: false,
@@ -268,13 +273,22 @@ fn case_sensitive() {
         &["abcz", "ABCz", "AbcZ", "abCZbABc"],
         &["abz", "abdc"],
     );
-    template_with_conf(
+    template_with_conf!(
         "abc[a-z]",
         RegexConf {
             case_sensitive: true,
         },
         &["abcz", "abca"],
         &["ABC", "Abc", "abcZ", "abCbABc", "ab", "abdc"],
+    );
+}
+
+#[test]
+fn special_escape() {
+    template!(
+        "^\\w{2,10}@mail\\.com$",
+        &["ab@mail.com", "abcde@mail.com", "abc_defg@mail.com"],
+        &["a@mail.com", "abcdefghijklmnop@mail.com", "abc?s@mail.com"],
     );
 }
 

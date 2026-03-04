@@ -205,11 +205,24 @@ impl<'a> RegexCompiler<'a> {
         }
     }
     fn escape(&mut self, c: char) -> Result<MatchCase> {
-        let mut is_cap = self.chars.clone().next().is_some_and(char::is_numeric);
+        let next = self.next(c)?;
+        if next == 's' {
+            return Ok(MatchCase::Whitespace);
+        } else if next == 'S' {
+            return Ok(MatchCase::NotWhitespace);
+        } else if next == 'd' {
+            return Ok(MatchCase::Decimal);
+        } else if next == 'D' {
+            return Ok(MatchCase::NotDecimal);
+        } else if next == 'w' {
+            return Ok(MatchCase::Word);
+        } else if next == 'W' {
+            return Ok(MatchCase::NotWord);
+        }
 
+        let mut is_cap = next.is_numeric();
         let mut named = false;
-        if !is_cap && self.chars.as_str().starts_with("k<") {
-            self.chars.next();
+        if !is_cap && next == 'k' && self.chars.as_str().starts_with('<') {
             self.chars.next();
             is_cap = true;
             named = true;
@@ -235,14 +248,17 @@ impl<'a> RegexCompiler<'a> {
                 }
                 eprintln!("Rem: {:?}", self.chars.as_str());
             } else {
-                while let Some(n) = self.chars.clone().next() {
-                    if !n.is_numeric() {
-                        break;
+                let mut next = next;
+                loop {
+                    captn = captn * 10 + (next as u8 - b'0') as usize;
+
+                    match self.chars.clone().next() {
+                        Some(n) if n.is_numeric() => {
+                            self.chars.next();
+                            next = n;
+                        }
+                        _ => break,
                     }
-
-                    captn = captn * 10 + (n as u8 - b'0') as usize;
-
-                    self.chars.next();
                 }
             }
             if self.n_captures < captn {
@@ -250,7 +266,7 @@ impl<'a> RegexCompiler<'a> {
             }
             MatchCase::Capture(captn)
         } else {
-            MatchCase::Char(self.next(c)?)
+            MatchCase::Char(next)
         };
         Ok(case)
     }
