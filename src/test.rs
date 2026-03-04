@@ -183,6 +183,12 @@ fn min_max() {
     );
 
     template(
+        "^a{6}$",
+        &["aaaaaa"],
+        &["a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaaa", "aaaaaaaa"],
+    );
+
+    template(
         "^a{3,}$",
         &["aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"],
         &["a", "aa"],

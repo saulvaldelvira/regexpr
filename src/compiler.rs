@@ -100,24 +100,28 @@ impl<'a> RegexCompiler<'a> {
 
         let i = self.chars.as_str().find('}').ok_or("Missing closing '}'")?;
         let slice = &self.chars.as_str()[..i];
-        let mut split = slice.split(',');
-        let min = split
-            .next()
-            .ok_or("Range must be split by ','. Ex: {12,15}")?;
-        let max = split
-            .next()
-            .ok_or("Range must be split by ','. Ex: {12,15}")?;
+        let mut min = None;
+        let mut max = None;
+        if slice.contains(',') {
+            let mut split = slice.split(',');
+            let mi = split
+                .next()
+                .ok_or("Range must be split by ','. Ex: {12,15}")?;
+            let ma = split
+                .next()
+                .ok_or("Range must be split by ','. Ex: {12,15}")?;
 
-        let min = if min.is_empty() {
-            None
+            if !mi.is_empty() {
+                min = Some(mi.parse().ok().ok_or("Error parsing number")?);
+            }
+            if !ma.is_empty() {
+                max = Some(ma.parse().ok().ok_or("Error parsing number")?);
+            }
         } else {
-            Some(min.parse().ok().ok_or("Error parsing number")?)
-        };
-        let max = if max.is_empty() {
-            None
-        } else {
-            Some(max.parse().ok().ok_or("Error parsing number")?)
-        };
+            let n = slice.parse().ok().ok_or("Error parsing number")?;
+            min = Some(n);
+            max = Some(n);
+        }
 
         for _ in 0..=i {
             self.chars.next();
