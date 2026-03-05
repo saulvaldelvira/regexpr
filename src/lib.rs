@@ -105,7 +105,6 @@ pub use matcher::{RegexMatch, RegexMatcher};
 #[derive(Debug)]
 pub struct Regex {
     matches: Box<[MatchCase]>,
-    n_captures: usize,
 }
 
 impl Display for Regex {
@@ -158,7 +157,7 @@ impl Regex {
     #[must_use]
     #[inline]
     pub fn find_matches_with_conf<'a>(&'a self, src: &'a str, conf: RegexConf) -> RegexMatcher<'a> {
-        RegexMatcher::new(src, &self.matches, self.n_captures, conf)
+        RegexMatcher::new(src, &self.matches, conf)
     }
 
     /// Returns true if the regex matches the given string

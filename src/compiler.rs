@@ -246,7 +246,6 @@ impl<'a> RegexCompiler<'a> {
                 for _ in 0..=close {
                     self.chars.next();
                 }
-                eprintln!("Rem: {:?}", self.chars.as_str());
             } else {
                 let mut next = next;
                 loop {
@@ -302,7 +301,6 @@ impl<'a> RegexCompiler<'a> {
 
         Ok(Regex {
             matches,
-            n_captures: self.n_captures,
         })
     }
     fn append(&mut self, case: MatchCase) {

@@ -1,7 +1,7 @@
 #[cfg(feature = "gui")]
 mod gui;
 
-#[cfg(not(feature = "gui"))]
+/* #[cfg(not(feature = "gui"))] */
 fn start_tui() {
     use regexpr::Regex;
     use std::io::{Write, stdin, stdout};
@@ -19,21 +19,29 @@ fn start_tui() {
         stdout().flush().unwrap();
 
         stdin().lines().map_while(Result::ok).for_each(|line| {
+            let time = std::time::Instant::now();
             let mut it = regex.find_matches(&line);
             if it.clone().next().is_none() {
                 println!("No matches");
             } else {
-                println!("=== Matches ===");
                 for (i, m) in (&mut it).enumerate() {
                     println!("{}) {m}", i + 1);
-                }
-                if it.get_groups().iter().any(|l| !l.is_empty()) {
-                    println!("===== Groups ======");
-                    for (i, m) in it.get_groups().iter().enumerate() {
-                        println!("{}) \"{m}\"", i + 1);
+                    if m.get_captures().iter().any(|l| !l.is_empty()) {
+                        println!("  Captures:");
+                        for (i, m) in m.get_captures().iter().enumerate() {
+                            println!("  {}) \"{m}\"", i + 1);
+                        }
                     }
                 }
-                println!("===================");
+            }
+            #[cfg(debug_assertions)] {
+                let elapsed = time.elapsed();
+                let ms = elapsed.as_millis();
+                if ms > 0 {
+                    println!("Time: {ms} ms");
+                } else {
+                    println!("Time: {} \u{00B5}s", elapsed.as_micros());
+                }
             }
             print!("> ");
             stdout().flush().unwrap();
