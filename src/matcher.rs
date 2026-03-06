@@ -1,7 +1,5 @@
 use crate::{MatchCase, RegexConf};
 use alloc::borrow::Cow;
-use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::fmt::Display;
 use core::iter::FusedIterator;
 use core::str::CharIndices;
@@ -16,9 +14,10 @@ use crate::Regex;
 pub struct RegexMatch<'a> {
     start: usize,
     slice: &'a str,
+    captures: Option<Vec<&'a str>>,
 }
 
-impl RegexMatch<'_> {
+impl<'a> RegexMatch<'a> {
     /// Gets the span of the string where it matched the [Regex]
     #[must_use]
     pub fn span(&self) -> (usize, usize) {
@@ -33,6 +32,15 @@ impl RegexMatch<'_> {
     pub fn slice(&self) -> &str {
         self.slice
     }
+
+    /// Gets the capture groups of this match
+    ///
+    /// The groups are returned in order, which means that
+    /// capture group 1 will be at index 0, and so on.
+    #[must_use]
+    pub fn get_captures(&self) -> &[&'a str] {
+        self.captures.as_deref().unwrap_or(&[])
+    }
 }
 
 impl Display for RegexMatch<'_> {
@@ -46,54 +54,23 @@ impl Display for RegexMatch<'_> {
 #[derive(Debug, Clone)]
 pub struct RegexMatcher<'a> {
     first: bool,
-    ctx: RegexCtx<'a>,
-    cases: &'a [MatchCase],
+    ctx: RegexCtx<'a, 'a>,
+    cases: LookAhead<'a, 'a>,
 }
 
 impl<'a> RegexMatcher<'a> {
     #[must_use]
-    pub fn new(src: &'a str, matches: &'a [MatchCase], n_captures: usize, conf: RegexConf) -> Self {
-        let captures = vec![""; n_captures].into_boxed_slice();
+    pub fn new(src: &'a str, matches: &'a [MatchCase], conf: RegexConf) -> Self {
         RegexMatcher {
             first: true,
-            cases: matches,
+            cases: LookAhead::new(LookAheadKind::List(matches), None),
             ctx: RegexCtx {
-                captures: Cow::Owned(captures),
-                following: Cow::Owned(vec![FollowingMatches::List(matches)]),
+                captures: Cow::Borrowed(&[]),
+                open_captures: Cow::Borrowed(&[][..]),
                 conf,
                 nc: src.char_indices(),
-                open_captures: Cow::Owned(Vec::new()),
             },
         }
-    }
-    /// Gets the current state of the capture groups.
-    ///
-    /// The groups are returned in order, which means that
-    /// capture group 1 will be at index 0, and so on.
-    ///
-    /// # Note
-    /// This list may be updated when [next](Iterator::next) is called.
-    /// So a common use of this struct, if we want to check the groups
-    /// at the end is the following.
-    ///
-    /// ```rust
-    /// use regexpr::RegexMatcher;
-    ///
-    /// fn check(mut matcher: RegexMatcher<'_>) {
-    ///     /* Borrow the matcher instead of moving it, so we
-    ///     can use it later to check the capture groups */
-    ///     for m in &mut matcher {
-    ///         /* Do something with m */
-    ///     }
-    ///     for group in matcher.get_groups() {
-    ///         /* Do something with group */
-    ///     }
-    /// }
-    /// ```
-    ///
-    #[must_use]
-    pub fn get_groups(&self) -> &[&'a str] {
-        &self.ctx.captures
     }
 }
 
@@ -101,166 +78,225 @@ impl<'a> Iterator for RegexMatcher<'a> {
     type Item = RegexMatch<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.ctx.nc.as_str().is_empty() && !self.first {
-            return None;
+        loop {
+            if self.ctx.nc.as_str().is_empty() && !self.first {
+                return None;
+            }
+            self.first = false;
+
+            let mut chars = self.ctx.shallow_clone();
+            if !self.cases.match_all(&mut chars) {
+                match self.ctx.nc.next() {
+                    Some(_) => continue,
+                    None => return None,
+                };
+            }
+
+            let start = self.ctx.nc.offset();
+            let end = chars.nc.offset();
+
+            let len = end - start;
+            let slice = &self.ctx.nc.as_str()[..len];
+
+            let RegexCtx { captures, nc, .. } = chars;
+            let mut caps = None;
+            if !captures.is_empty() {
+                let mut v = Vec::with_capacity(captures.len());
+                v.extend(
+                    captures
+                        .iter()
+                        .map(|(c, l)| l.map(|l| &c.as_str()[..l]).unwrap_or("")),
+                );
+                caps = Some(v);
+            }
+            self.ctx.nc = nc;
+
+            if self.cases.is_empty() {
+                self.ctx.nc.next();
+            }
+
+            return Some(RegexMatch {
+                start,
+                slice,
+                captures: caps,
+            });
         }
-        self.first = false;
-
-        let mut chars = self.ctx.clone();
-        chars.following = vec![FollowingMatches::List(self.cases)].into();
-        if !chars.following_match() {
-            return match self.ctx.nc.next() {
-                Some(_) => self.next(),
-                None => None,
-            };
-        }
-
-        let start = self.ctx.nc.offset();
-        let end = chars.nc.offset();
-
-        let len = end - start;
-        let slice = &self.ctx.nc.as_str()[..len];
-
-        self.ctx = chars;
-
-        if self.cases.is_empty() {
-            self.ctx.nc.next();
-        }
-
-        Some(RegexMatch { start, slice })
     }
 }
 
 impl FusedIterator for RegexMatcher<'_> {}
 
 #[derive(Clone, Debug)]
-pub enum FollowingMatches<'a> {
-    Repeat {
-        m: &'a MatchCase,
-        curr: usize,
-        min: usize,
-    },
+pub enum LookAheadKind<'a> {
+    Repeat { m: &'a MatchCase, num: usize },
     List(&'a [MatchCase]),
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct LookAhead<'l, 'a> {
+    kind: LookAheadKind<'a>,
+    then: Option<&'l LookAhead<'l, 'a>>,
+}
+
+impl<'l, 'a> LookAhead<'l, 'a> {
+    pub fn new(l: LookAheadKind<'a>, then: Option<&'l LookAhead<'l, 'a>>) -> Self {
+        LookAhead { kind: l, then }
+    }
+
+    pub fn match_all(&self, ctx: &mut RegexCtx<'_, 'a>) -> bool {
+        let mut r = true;
+        match self.kind {
+            LookAheadKind::Repeat { m, mut num } if num > 0 => loop {
+                num -= 1;
+                r = m.matches(
+                    ctx,
+                    &LookAhead {
+                        kind: LookAheadKind::Repeat { m, num },
+                        then: self.then,
+                    },
+                );
+                if !r || num == 0 {
+                    break;
+                }
+            },
+            LookAheadKind::List(match_cases) if !match_cases.is_empty() => {
+                for i in 0..match_cases.len() {
+                    let rem = match_cases.get(i + 1..).unwrap_or(&[]);
+                    r = match_cases[i].matches(
+                        ctx,
+                        &LookAhead {
+                            kind: LookAheadKind::List(rem),
+                            then: self.then,
+                        },
+                    );
+                    if !r {
+                        break;
+                    }
+                }
+                ctx.end_capture(&ctx.char_iter());
+            }
+            _ => {}
+        }
+        r && self.then.as_ref().is_none_or(|t| t.match_all(ctx))
+    }
+
+    const fn is_empty(&self) -> bool {
+        self.then.is_none()
+            && match self.kind {
+                LookAheadKind::Repeat { num, .. } => num == 0,
+                LookAheadKind::List(match_cases) => match_cases.is_empty(),
+            }
+    }
+}
+
 #[derive(Clone, Debug)]
-pub(crate) struct RegexCtx<'a> {
-    captures: Cow<'a, Box<[&'a str]>>,
-    following: Cow<'a, [FollowingMatches<'a>]>,
+pub(crate) struct RegexCtx<'ctx, 'a> {
+    captures: Cow<'ctx, [(CharIndices<'a>, Option<usize>)]>,
+    open_captures: Cow<'ctx, [usize]>,
     conf: RegexConf,
     nc: CharIndices<'a>,
-    open_captures: Cow<'a, [(usize, CharIndices<'a>)]>,
 }
 
-fn __next(conf: RegexConf, chrs: &mut CharIndices<'_>) -> Option<char> {
-    chrs.next().map(|(_, c)| {
-        if conf.case_sensitive {
-            c
-        } else {
-            c.to_lowercase().next().unwrap_or(c)
-        }
-    })
+macro_rules! next {
+    ($conf:expr, $chrs:expr) => {
+        $chrs.next().map(|(_, c)| {
+            if $conf.case_sensitive {
+                c
+            } else {
+                c.to_lowercase().next().unwrap_or(c)
+            }
+        })
+    };
 }
 
-impl<'a> RegexCtx<'a> {
+impl<'a> RegexCtx<'_, 'a> {
+    #[inline]
     pub fn next_char(&mut self) -> Option<char> {
-        __next(self.conf, &mut self.nc)
+        next!(self.conf, &mut self.nc)
     }
+    #[inline]
     pub fn char_offset(&mut self) -> usize {
         self.nc.offset()
     }
-    pub fn peek_char(&mut self) -> Option<char> {
-        __next(self.conf, &mut self.nc.clone())
+    #[inline]
+    pub fn char_iter(&self) -> CharIndices<'a> {
+        self.nc.clone()
     }
+
+    #[inline]
+    pub fn peek_char(&mut self) -> Option<char> {
+        next!(self.conf, self.nc.clone())
+    }
+    #[inline]
     pub fn conf(&self) -> RegexConf {
         self.conf
     }
-    pub fn enter_scope(&mut self, cases: FollowingMatches<'a>) {
-        self.following.to_mut().push(cases);
-    }
-    pub fn exit_scope(&mut self) {
-        self.following.to_mut().pop();
-    }
-
-    fn next_case(&mut self) -> Option<&'a MatchCase> {
-        match self.following.last() {
-            Some(fm) => match fm {
-                FollowingMatches::List(last) => {
-                    if last.is_empty() {
-                        self.following.to_mut().pop();
-                        self.pop_capture();
-                        self.next_case()
-                    } else {
-                        let ret = &last[0];
-                        *self.following.to_mut().last_mut().unwrap_or_else(|| {
-                            unreachable!(
-                                "We've checked that self.following has at least one element"
-                            )
-                        }) = FollowingMatches::List(last.get(1..).unwrap_or(&[]));
-                        Some(ret)
-                    }
-                }
-                FollowingMatches::Repeat { curr, min, .. } => {
-                    if *curr < *min {
-                        let FollowingMatches::Repeat { curr, m, .. } = self
-                            .following
-                            .to_mut()
-                            .last_mut()
-                            .unwrap_or_else(|| unreachable!())
-                        else {
-                            unreachable!()
-                        };
-                        *curr += 1;
-                        Some(m)
-                    } else {
-                        self.following.to_mut().pop();
-                        self.next_case()
-                    }
-                }
-            },
-            None => None,
-        }
-    }
     pub fn get_capture(&self, id: usize) -> &'a str {
         let id = id.wrapping_sub(1);
-        self.captures.get(id).unwrap_or_else(|| unreachable!())
+        let Some((nc, len)) = self.captures.get(id) else {
+            return "";
+        };
+        &nc.as_str()[..len.unwrap_or_else(|| self.nc.offset() - nc.offset() - 1)]
     }
-    pub fn push_capture(&mut self, id: usize) {
-        let caps = self.open_captures.to_mut();
-        caps.reserve(self.captures.len());
-        let e = (id, self.nc.clone());
-        if caps.len() >= caps.capacity() {
+    pub fn start_capture(&mut self, id: usize, s: CharIndices<'a>) {
+        let caps = self.captures.to_mut();
+        if caps.len() <= (id - 1) {
+            caps.resize_with(id, || (s.clone(), None));
+        }
+        caps[id - 1] = (s, None);
+        self.open_captures.to_mut().push(id);
+    }
+    pub fn end_capture(&mut self, s: &CharIndices<'a>) {
+        if self.open_captures.is_empty() {
+            return;
+        }
+        let Some(id) = self.open_captures.to_mut().pop() else {
             unreachable!()
-        } else {
-            caps.push(e);
-        }
-        /* UNSTABLE ALTERNATIVE */
-        /* caps.push_within_capacity(e) */
-        /*     .unwrap_or_else(|_| { */
-        /*         unreachable!() */
-        /*     }); */
+        };
+        let c = &mut self.captures.to_mut()[id - 1];
+        c.1 = Some(s.offset() - c.0.offset());
     }
-    pub fn pop_capture(&mut self) {
-        self.update_open_captures();
-        self.open_captures.to_mut().pop();
-    }
-    pub fn has_following(&self) -> bool {
-        !self.following.is_empty()
-    }
-    fn update_open_captures(&mut self) {
-        for (id, chars) in self.open_captures.to_mut() {
-            let len = self.nc.offset() - chars.offset();
-            let slice = &chars.as_str()[..len];
-            self.captures.to_mut()[*id - 1] = slice;
-        }
-    }
-    pub fn following_match(&mut self) -> bool {
-        self.update_open_captures();
-        while let Some(case) = self.next_case() {
-            if !case.matches(self) {
-                return false;
+
+    pub fn borrow_shallow<R>(&mut self, f: impl FnOnce(&mut RegexCtx<'_, 'a>) -> (R, bool)) -> R {
+        let mut ctx = RegexCtx {
+            captures: Cow::Borrowed(&self.captures),
+            open_captures: Cow::Borrowed(&self.open_captures),
+            nc: self.nc.clone(),
+            conf: self.conf,
+        };
+        let (r, should_overwrite) = f(&mut ctx);
+        let RegexCtx {
+            captures,
+            open_captures,
+            nc,
+            ..
+        } = ctx;
+        if should_overwrite {
+            let mut cap = None;
+            let mut ocap = None;
+            if let Cow::Owned(o) = captures {
+                cap = Some(o);
             }
+            if let Cow::Owned(o) = open_captures {
+                ocap = Some(o);
+            }
+            if let Some(o) = cap {
+                self.captures = Cow::Owned(o);
+            }
+            if let Some(o) = ocap {
+                self.open_captures = Cow::Owned(o);
+            }
+            self.nc = nc;
         }
-        true
+        r
+    }
+    #[inline]
+    pub fn shallow_clone<'slf>(&'slf self) -> RegexCtx<'slf, 'a> {
+        RegexCtx {
+            captures: Cow::Borrowed(&self.captures),
+            nc: self.nc.clone(),
+            open_captures: Cow::Borrowed(&self.open_captures),
+            conf: self.conf,
+        }
     }
 }

@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
 
-use crate::matcher::{FollowingMatches, RegexCtx};
+use crate::matcher::{LookAhead, LookAheadKind, RegexCtx};
 
 #[derive(Clone, Debug)]
 pub enum MatchCase {
@@ -41,31 +41,41 @@ pub enum MatchCase {
 }
 
 impl MatchCase {
-    fn lazy_star_loop<'a>(&'a self, ctx: &mut RegexCtx<'a>) -> bool {
+    fn lazy_star_loop<'a>(
+        &'a self,
+        ctx: &mut RegexCtx<'_, 'a>,
+        lookahead: &LookAhead<'_, 'a>,
+    ) -> bool {
         loop {
-            if ctx.has_following() && ctx.clone().following_match() {
+            if ctx.borrow_shallow(|ctx| (lookahead.match_all(ctx), false)) {
                 return true;
             }
-            let mut it = ctx.clone();
-            if self.matches(&mut it) {
-                *ctx = it;
-            } else {
+            let is_match = ctx.borrow_shallow(|ctx| {
+                let ret = self.matches(ctx, lookahead);
+                (ret, ret)
+            });
+            if !is_match {
                 return true;
             }
         }
     }
-    fn greedy_star_loop<'a>(&'a self, ctx: &mut RegexCtx<'a>) -> bool {
+    fn greedy_star_loop<'a>(
+        &'a self,
+        ctx: &mut RegexCtx<'_, 'a>,
+        lookahead: &LookAhead<'_, 'a>,
+    ) -> bool {
         let mut last_next_match = None;
 
         loop {
-            if ctx.clone().following_match() {
+            if ctx.borrow_shallow(|ctx| (lookahead.match_all(ctx), false)) {
                 last_next_match = Some(ctx.clone());
             }
 
-            let mut it = ctx.clone();
-            if self.matches(&mut it) {
-                *ctx = it;
-            } else {
+            let is_match = ctx.borrow_shallow(|ctx| {
+                let ret = self.matches(ctx, lookahead);
+                (ret, ret)
+            });
+            if !is_match {
                 if let Some(it) = last_next_match {
                     *ctx = it;
                 }
@@ -73,15 +83,24 @@ impl MatchCase {
             }
         }
     }
-    fn star_loop<'a>(&'a self, ctx: &mut RegexCtx<'a>, lazy: bool) -> bool {
+    fn star_loop<'a>(
+        &'a self,
+        ctx: &mut RegexCtx<'_, 'a>,
+        lazy: bool,
+        lookahead: &LookAhead<'_, 'a>,
+    ) -> bool {
         if lazy {
-            self.lazy_star_loop(ctx)
+            self.lazy_star_loop(ctx, lookahead)
         } else {
-            self.greedy_star_loop(ctx)
+            self.greedy_star_loop(ctx, lookahead)
         }
     }
     #[allow(clippy::too_many_lines)]
-    pub(crate) fn matches<'a>(&'a self, ctx: &mut RegexCtx<'a>) -> bool {
+    pub(crate) fn matches<'a>(
+        &'a self,
+        ctx: &mut RegexCtx<'_, 'a>,
+        lookahead: &LookAhead<'_, 'a>,
+    ) -> bool {
         macro_rules! next {
             () => {{
                 let Some(ch) = ctx.next_char() else {
@@ -106,17 +125,17 @@ impl MatchCase {
             }
             MatchCase::NotDecimal => !next!().is_digit(10),
             MatchCase::Group { case, capture_id } => {
-                ctx.push_capture(*capture_id);
-                let ret = case.matches(ctx);
-                ctx.pop_capture();
+                let curr = ctx.char_iter();
+                ctx.start_capture(*capture_id, curr);
+                let ret = case.matches(ctx, lookahead);
+                ctx.end_capture(&ctx.char_iter());
                 ret
             }
             MatchCase::List(cases) => {
                 for i in 0..cases.len() {
                     let rem = cases.get(i + 1..).unwrap_or(&[]);
-                    ctx.enter_scope(FollowingMatches::List(rem));
-                    let is_match = cases[i].matches(ctx);
-                    ctx.exit_scope();
+                    let look = LookAhead::new(LookAheadKind::List(rem), Some(lookahead));
+                    let is_match = cases[i].matches(ctx, &look);
                     if !is_match {
                         return false;
                     }
@@ -124,29 +143,32 @@ impl MatchCase {
                 true
             }
             MatchCase::Or(l) => l.iter().any(|rule| {
-                let mut newit = ctx.clone();
-                let ret = rule.matches(&mut newit);
-                if ret {
-                    *ctx = newit;
-                }
-                ret
+                ctx.borrow_shallow(|newit| {
+                    let ret = rule.matches(newit, lookahead);
+                    (ret, ret)
+                })
             }),
             MatchCase::Opt(c) => {
-                let mut newit = ctx.clone();
-                if c.matches(&mut newit) && newit.clone().following_match() {
-                    *ctx = newit;
-                }
+                ctx.borrow_shallow(|newit| {
+                    if c.matches(newit, lookahead)
+                        && lookahead.match_all(&mut newit.shallow_clone())
+                    {
+                        ((), true)
+                    } else {
+                        ((), false)
+                    }
+                });
                 true
             }
             MatchCase::AnyOne => ctx.next_char().is_some(),
             MatchCase::OneOrMore { case, lazy } => {
-                if !case.matches(ctx) {
+                if !case.matches(ctx, lookahead) {
                     return false;
                 }
 
-                case.star_loop(ctx, *lazy)
+                case.star_loop(ctx, *lazy, lookahead)
             }
-            MatchCase::Star { case, lazy } => case.star_loop(ctx, *lazy),
+            MatchCase::Star { case, lazy } => case.star_loop(ctx, *lazy, lookahead),
             MatchCase::Start => ctx.char_offset() == 0,
             MatchCase::End => ctx.next_char().is_none(),
             MatchCase::Between(start, end) => {
@@ -162,11 +184,13 @@ impl MatchCase {
                 c >= start && c <= end
             }
             MatchCase::Not(match_case) => match ctx.peek_char() {
-                Some(_) => !match_case.matches(ctx),
+                Some(_) => !match_case.matches(ctx, lookahead),
                 None => false,
             },
             MatchCase::CharMatch(cases) => {
-                let ret = cases.iter().any(|case| case.matches(&mut ctx.clone()));
+                let ret = cases
+                    .iter()
+                    .any(|case| case.matches(&mut ctx.shallow_clone(), lookahead));
                 ctx.next_char();
                 ret
             }
@@ -175,15 +199,16 @@ impl MatchCase {
 
                 if let Some(min) = min {
                     for i in 0..*min {
-                        ctx.enter_scope(FollowingMatches::Repeat {
-                            m: case,
-                            curr: i + 1,
-                            min: *min,
-                        });
-                        if !case.matches(ctx) {
+                        let look = LookAhead::new(
+                            LookAheadKind::Repeat {
+                                m: case,
+                                num: *min - i - 1,
+                            },
+                            Some(lookahead),
+                        );
+                        if !case.matches(ctx, &look) {
                             return false;
                         }
-                        ctx.exit_scope();
                         n += 1;
                     }
                 }
@@ -193,10 +218,10 @@ impl MatchCase {
                         break;
                     }
 
-                    let mut it = ctx.clone();
-                    if case.matches(&mut it) {
-                        *ctx = it;
-                    } else {
+                    if !ctx.borrow_shallow(|it| {
+                        let ret = case.matches(it, lookahead);
+                        (ret, ret)
+                    }) {
                         break;
                     }
 
