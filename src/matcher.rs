@@ -82,6 +82,8 @@ impl<'a> Iterator for RegexMatcher<'a> {
             if self.ctx.nc.as_str().is_empty() && !self.first {
                 return None;
             }
+            let LookAheadKind::List(l) = self.cases.kind else { unreachable!() };
+            if !self.first && l.first().is_some_and(|m| matches!(m, MatchCase::Start)) { return None }
             self.first = false;
 
             let mut chars = self.ctx.shallow_clone();
