@@ -91,6 +91,11 @@ fn repeat_star() {
         &["a1212b 12", "a121212b 12", "a1uno21dos2b 1dos2"],
         &[],
     );
+    template!(
+        "(.+){5}",
+        &["aaaaa", "aaaaaa", "aaaaaaaa"],
+        &["a", "aa", "aaa", "aaaa"],
+    );
 }
 
 #[test]
@@ -269,6 +274,7 @@ fn case_sensitive() {
         "abc[a-z]",
         RegexConf {
             case_sensitive: false,
+            ignore_captures_in_result: false,
         },
         &["abcz", "ABCz", "AbcZ", "abCZbABc"],
         &["abz", "abdc"],
@@ -277,6 +283,7 @@ fn case_sensitive() {
         "abc[a-z]",
         RegexConf {
             case_sensitive: true,
+            ignore_captures_in_result: false,
         },
         &["abcz", "abca"],
         &["ABC", "Abc", "abcZ", "abCbABc", "ab", "abdc"],

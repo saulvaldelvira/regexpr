@@ -125,11 +125,19 @@ impl Display for Regex {
 #[repr(C)]
 pub struct RegexConf {
     pub case_sensitive: bool,
+    pub ignore_captures_in_result: bool,
 }
 
 const DEFAULT_REGEX_CONF: RegexConf = RegexConf {
     case_sensitive: true,
+    ignore_captures_in_result: false,
 };
+
+impl Default for RegexConf {
+    fn default() -> Self {
+        DEFAULT_REGEX_CONF
+    }
+}
 
 impl Regex {
     /// Compile the given string into a [Regex]

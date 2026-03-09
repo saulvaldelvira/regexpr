@@ -106,7 +106,7 @@ impl<'a> Iterator for RegexMatcher<'a> {
 
             let RegexCtx { captures, nc, .. } = chars;
             let mut caps = None;
-            if !captures.is_empty() {
+            if !self.ctx.conf.ignore_captures_in_result && !captures.is_empty() {
                 let mut v = Vec::with_capacity(captures.len());
                 v.extend(
                     captures
