@@ -184,6 +184,42 @@ impl Regex {
     pub fn test_with_conf(&self, src: &str, conf: RegexConf) -> bool {
         self.find_matches_with_conf(src, conf).next().is_some()
     }
+
+    /// Replaces all matches of `self` on `src` with the `replacement` string
+    ///
+    /// # Example
+    /// ```
+    /// use regexpr::Regex;
+    /// use std::borrow::Cow;
+    ///
+    /// let regex = Regex::compile("a[0-9]b").unwrap();
+    ///
+    /// assert_eq!(
+    ///     regex.replace("a1b_a2b_a12b", "P"),
+    ///     Cow::<str>::Owned(String::from("P_P_a12b"))
+    /// );
+    /// assert_eq!(regex.replace("ABCD", "P"), Cow::Borrowed("ABCD"));
+    /// ```
+    pub fn replace<'a>(&self, src: &'a str, replacement: &str) -> Cow<'a, str> {
+        let matches = self.find_matches(src);
+        if matches.clone().next().is_none() {
+            return Cow::Borrowed(src);
+        }
+
+        let mut result = String::new();
+        let mut curr = 0;
+        for m in matches {
+            let (start, end) = m.span();
+            result.push_str(&src[curr..start]);
+            result.push_str(replacement);
+            curr = end;
+        }
+        if let Some(remainder) = src.get(curr..) {
+            result.push_str(remainder);
+        }
+
+        Cow::Owned(result)
+    }
 }
 
 impl TryFrom<&str> for Regex {
@@ -198,6 +234,9 @@ impl TryFrom<&str> for Regex {
 /// ``matches_regex`` to &str
 pub trait RegexTestable {
     /// Returns true if it matches the given [Regex]
+    ///
+    /// __Note__: This method compiles the regex on each call. A more
+    /// optimal approach would be to use the `Regex::test` method
     fn matches_regex(&self, regex: &str) -> bool;
 }
 
@@ -212,29 +251,27 @@ impl RegexTestable for &str {
 pub trait ReplaceRegex {
     /// Extension method for &str, that replaces all instances of a regex with a replacement string
     ///
+    /// __Note__: This method compiles the regex on each call. A more optimal approach would be to use
+    /// the `Regex::replace` method
+    ///
     /// # Errors
     /// If the regex fails to compile
+    ///
+    /// # Example
+    /// ```
+    /// use regexpr::ReplaceRegex;
+    ///
+    /// assert_eq!(
+    ///     "_a12345b_".replace_regex("a[0-9]+b", "N").unwrap(),
+    ///     "_N_",
+    /// )
+    /// ```
     fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a, str>>;
 }
 
 impl ReplaceRegex for &str {
     fn replace_regex<'a>(&'a self, regex: &str, replacement: &str) -> Result<Cow<'a, str>> {
-        let regex = Regex::compile(regex)?;
-        let matches = regex.find_matches(self);
-        if matches.clone().next().is_none() {
-            return Ok(Cow::Borrowed(self));
-        }
-
-        let mut result = String::new();
-        let mut curr = 0;
-        for m in matches {
-            let (start, end) = m.span();
-            result.push_str(&self[curr..start]);
-            result.push_str(replacement);
-            curr = end;
-        }
-
-        Ok(Cow::Owned(result))
+        Regex::compile(regex).map(|regex| regex.replace(self, replacement))
     }
 }
 
