@@ -242,7 +242,7 @@ impl<'a> RegexCtx<'_, 'a> {
         let Some((nc, len)) = self.captures.get(id) else {
             return "";
         };
-        &nc.as_str()[..len.unwrap_or_else(|| self.nc.offset() - nc.offset() - 1)]
+        &nc.as_str()[..len.unwrap_or_else(|| (self.nc.offset() - nc.offset()).saturating_sub(1))]
     }
     pub fn start_capture(&mut self, id: usize, s: CharIndices<'a>) {
         let caps = self.captures.to_mut();
