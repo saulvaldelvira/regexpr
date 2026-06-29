@@ -240,11 +240,9 @@ pub trait RegexTestable {
     fn matches_regex(&self, regex: &str) -> bool;
 }
 
-impl RegexTestable for &str {
+impl<S: AsRef<str>> RegexTestable for S {
     fn matches_regex(&self, regex: &str) -> bool {
-        Regex::compile(regex)
-            .map(|regex| regex.test(self))
-            .unwrap_or(false)
+        Regex::compile(regex).is_ok_and(|regex| regex.test(self.as_ref()))
     }
 }
 

@@ -111,7 +111,7 @@ impl<'a> Iterator for RegexMatcher<'a> {
                 v.extend(
                     captures
                         .iter()
-                        .map(|(c, l)| l.map(|l| &c.as_str()[..l]).unwrap_or("")),
+                        .map(|(c, l)| l.map_or("", |l| &c.as_str()[..l])),
                 );
                 caps = Some(v);
             }
