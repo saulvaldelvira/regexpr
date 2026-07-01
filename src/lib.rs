@@ -148,8 +148,8 @@ impl Regex {
     /// If the regex fails to compile, the error variant contains
     /// a message explaining the issue
     ///
-    pub fn compile(src: &str) -> Result<Self> {
-        RegexCompiler::new(src).process()
+    pub fn compile(src: impl AsRef<str>) -> Result<Self> {
+        RegexCompiler::new(src.as_ref()).process()
     }
 
     /// Returns an [Iterator] over all the [`matches`] of the [Regex] in the given string
@@ -222,13 +222,26 @@ impl Regex {
     }
 }
 
-impl TryFrom<&str> for Regex {
-    type Error = RegexError;
+macro_rules! impl_tryfrom {
+    ($ty:ty) => {
+        impl TryFrom<$ty> for Regex {
+            type Error = RegexError;
 
-    fn try_from(value: &str) -> Result<Self> {
-        Regex::compile(value)
+            fn try_from(value: $ty) -> Result<Self> {
+                Regex::compile(value)
+            }
+        }
+    };
+    (@with_refs $($ty:ty),* $(,)?) => {
+        impl_tryfrom!($( $ty , &$ty),* );
+    };
+    ($($ty:ty),* $(,)?) => {
+        $( impl_tryfrom!($ty); )*
     }
 }
+
+impl_tryfrom!(@with_refs String, Cow<'_, str>, alloc::string::Drain<'_>);
+impl_tryfrom!(&str);
 
 /// This trait is used to add an extension method
 /// ``matches_regex`` to &str
